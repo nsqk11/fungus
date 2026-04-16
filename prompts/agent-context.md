@@ -22,7 +22,7 @@ fungus/
 │   └── fruit/       Grow — produce new skills from mature patterns
 ├── skills/          Grown skills (mushrooms)
 ├── prompts/         Standards: coding-style, writing-style, skill-spec
-└── .data/           Runtime data (mem.json) — gitignored
+└── data/            Runtime data (memory.json) — gitignored
 ```
 
 ## Data Flow
