@@ -6,7 +6,8 @@ Writing standard for all SKILL.md files in Fungus — modules and grown skills.
 
 - Voice: imperative. "Sense signals", not "This module senses signals".
 - Language: English only.
-- Length: each section ≤ 20 lines. Longer means too many responsibilities — split.
+- Length: each section ≤ 20 lines.
+  Longer means too many responsibilities — split.
 - References: backtick + name (`mycelium`), not file paths.
 - After writing: remove all `<description>` and `<variant>` tags.
 

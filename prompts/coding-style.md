@@ -4,67 +4,71 @@ Code standards for the Fungus repository.
 
 ## Style Guide
 
-Follow [Google Style Guide](https://google.github.io/styleguide/) for the
-corresponding language:
+Apply [Google Style Guide](https://google.github.io/styleguide/)
+for the corresponding language:
 
 - [Python](https://google.github.io/styleguide/pyguide.html)
 - [Shell](https://google.github.io/styleguide/shellguide.html)
 
-When Google Style does not cover a case, prefer readability over cleverness.
+When Google Style does not cover a case, choose the more readable option.
 
 ## Design Principles
 
-Seven principles govern all code in this repository. Listed in order of
-priority — when two principles conflict, the higher one wins.
+Apply these seven principles to all code.
+Listed in order of priority —
+when two conflict, the higher one wins.
 
 ### 1. KISS — Keep It Simple
 
-Write the simplest solution that works. If a piece of code needs a comment to
-explain *what* it does (not *why*), it is too complex. Refactor until the code
-speaks for itself.
+Write the simplest solution that works.
+If code needs a comment to explain *what* it does (not *why*),
+refactor until it speaks for itself.
 
 ### 2. YAGNI — You Aren't Gonna Need It
 
-Do not build for hypothetical future requirements. Implement what is needed
-today. When the future arrives, refactor — simple code is easy to change.
+Do not build for hypothetical future requirements.
+Implement what is needed today.
+Simple code is easy to change when the future arrives.
 
 ### 3. DRY — Don't Repeat Yourself
 
-Every piece of knowledge should have a single, authoritative representation.
-If the same logic appears twice, extract it. If the same constant appears
-twice, name it.
+Give every piece of knowledge a single, authoritative representation.
+If the same logic appears twice, extract it.
+If the same constant appears twice, name it.
 
 ### 4. SoC — Separation of Concerns
 
-Each file, function, and module should have one reason to change. Parsing,
-logic, and I/O belong in separate functions. A module that does two things
-should be two modules.
+Give each file, function, and module one reason to change.
+Keep parsing, logic, and I/O in separate functions.
+Split a module that does two things.
 
 ### 5. SOLID
 
 - **Single Responsibility**: one function, one job.
-- **Open/Closed**: extend behavior through composition, not modification.
-- **Liskov Substitution**: substitutable components must honor the same contract.
-- **Interface Segregation**: depend on narrow interfaces, not broad ones.
-- **Dependency Inversion**: depend on abstractions, not concrete implementations.
+- **Open/Closed**: extend through composition, not modification.
+- **Liskov Substitution**: honor the same contract.
+- **Interface Segregation**: depend on narrow interfaces.
+- **Dependency Inversion**: depend on abstractions.
 
 ### 6. LoD — Law of Demeter
 
-A function should only talk to its direct dependencies. Pass data, not deep
-object graphs. If you see `a.b.c.d`, something is wrong.
+Only talk to direct dependencies.
+Pass data, not deep object graphs.
+If you see `a.b.c.d`, refactor.
 
 ### 7. COI — Composition Over Inheritance
 
-Build behavior by combining small, focused functions — not by inheriting from
-base classes. Prefer has-a over is-a.
+Build behavior by combining small, focused functions.
+Prefer has-a over is-a.
+Do not use class inheritance for code reuse.
 
 ## Commit Messages
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 <type>: <short summary>
 ```
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
-Summary: imperative mood, lowercase, no period, max 72 characters.
+Write in imperative mood, lowercase, no period, max 72 characters.
