@@ -1,14 +1,17 @@
 #!/bin/bash
 # Substrate — signal conductor for Fungus modules.
 # Routes hook events to matching module scripts.
-# Usage: substrate.sh <hook-name> [stdin-data]
+# Reads hook_event_name from stdin JSON payload.
 set -euo pipefail
 
-HOOK="${1:?Usage: substrate.sh <hook-name>}"
 export FUNGUS_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 
 STDIN_DATA=""
 [ ! -t 0 ] && STDIN_DATA=$(cat)
+[ -z "$STDIN_DATA" ] && exit 0
+
+HOOK=$(printf '%s' "$STDIN_DATA" | python3.12 -c "import sys,json; print(json.load(sys.stdin).get('hook_event_name',''))")
+[ -z "$HOOK" ] && exit 0
 
 # Python resolves which scripts to run and in what order
 SCRIPTS=$(python3.12 "$FUNGUS_HOME/hooks/substrate.py" "$HOOK" "$FUNGUS_HOME")
@@ -23,9 +26,5 @@ while IFS='|' read -r script module; do
   else
     runner="bash"
   fi
-  if [ -n "$STDIN_DATA" ]; then
-    printf '%s' "$STDIN_DATA" | $runner "$script"
-  else
-    $runner "$script"
-  fi
+  printf '%s' "$STDIN_DATA" | $runner "$script"
 done <<< "$SCRIPTS"

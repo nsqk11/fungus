@@ -76,9 +76,9 @@ Hyphae don't sense blindly — each hook is a different kind of soil:
 
 | Soil | Hook | What Hyphae Detect |
 |------|------|--------------------|
-| **User** | `user-prompt-submit` | Habits, preferences, corrections, communication patterns |
-| **Agent** | `pre-tool-use` | Decision logic, tool selection, reasoning paths |
-| **Environment** | `post-tool-use` | Tool failures, gotchas, environment limitations |
+| **User** | `userPromptSubmit` | Habits, preferences, corrections, communication patterns |
+| **Agent** | `preToolUse` | Decision logic, tool selection, reasoning paths |
+| **Environment** | `postToolUse` | Tool failures, gotchas, environment limitations |
 
 Three dimensions — user, agent, environment — give the network a complete picture
 of every interaction.
@@ -90,7 +90,7 @@ Nutrients flow in one direction — from raw spores to mature network memory:
 ```
 spores → nutrients → fruiting → network
   ↑          ↑           ↑          ↑
-Hypha      Mycelium     Fruit    agent-spawn
+Hypha      Mycelium     Fruit    agentSpawn
 writes     writes       writes   reads
 ```
 
@@ -101,7 +101,7 @@ without conflict. Boundaries are declared in each script's annotations —
 no central config:
 
 ```python
-# @hook post-tool-use
+# @hook postToolUse
 # @priority 10
 # @module hypha
 # @writes spores

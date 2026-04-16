@@ -12,7 +12,7 @@ Flat JSON array. Each entry is one record.
     "id": "20260416001",
     "timestamp": "2026-04-16T07:20:00Z",
     "stage": "spore",
-    "hook": "post-tool-use",
+    "hook": "postToolUse",
     "source": "environment",
     "data": {},
     "summary": "",

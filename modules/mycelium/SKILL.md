@@ -19,7 +19,7 @@ description: "[module] Digest raw spores into structured nutrients at session st
 
 ## Interface
 
-- **Hooks**: `agent-spawn`
+- **Hooks**: `agentSpawn`
 - **Reads**: `spore` and `network` stages via `bash memory.sh`
 - **Writes**: updates `spore` → `nutrient` or `skipped` via `bash memory.sh`
 
@@ -59,7 +59,7 @@ bash hooks/memory.sh update --id <id> --field stage --value skipped
 
 ## Behavior
 
-### On agent-spawn
+### On agentSpawn
 
 1. Run `bash hooks/memory.sh list --stage network`.
    Output as `<memory>` block.

@@ -20,7 +20,7 @@ description: "[module] Detect mature patterns in nutrients and produce new skill
 
 ## Interface
 
-- **Hooks**: `agent-spawn`
+- **Hooks**: `agentSpawn`
 - **Reads**: `nutrient` stage via `bash memory.sh`
 - **Writes**: updates `nutrient` → `fruiting` or `network` via `bash memory.sh`
 
@@ -53,7 +53,7 @@ bash hooks/memory.sh update --id <id> --field stage --value fruiting
 
 ## Behavior
 
-### On agent-spawn
+### On agentSpawn
 
 1. Run `bash hooks/memory.sh list --stage nutrient`.
    If no nutrients, skip silently.

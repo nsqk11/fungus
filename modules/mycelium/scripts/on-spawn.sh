@@ -1,5 +1,5 @@
 #!/bin/bash
-# @hook agent-spawn
+# @hook agentSpawn
 # @priority 20
 # @module mycelium
 # @writes nutrient

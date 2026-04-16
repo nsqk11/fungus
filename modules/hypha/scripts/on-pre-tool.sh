@@ -1,5 +1,5 @@
 #!/bin/bash
-# @hook pre-tool-use
+# @hook preToolUse
 # @priority 10
 # @module hypha
 # @writes spore
@@ -14,6 +14,6 @@ printf '%s' "$STDIN" | grep -q 'memory\.sh' && exit 0
 
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
-  --hook pre-tool-use \
+  --hook preToolUse \
   --source agent \
   --data "$STDIN"

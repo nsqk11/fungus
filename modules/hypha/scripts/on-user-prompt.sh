@@ -1,5 +1,5 @@
 #!/bin/bash
-# @hook user-prompt-submit
+# @hook userPromptSubmit
 # @priority 10
 # @module hypha
 # @writes spore
@@ -11,6 +11,6 @@ STDIN=$(cat)
 
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
-  --hook user-prompt-submit \
+  --hook userPromptSubmit \
   --source user \
   --data "$STDIN"

@@ -23,12 +23,12 @@ Like auditd excluding its own PID, Hypha excludes tool calls that
 operate on `memory.sh`. This prevents a feedback loop where digest
 operations (which call `memory.sh`) would generate new spores.
 
-Applies to: `pre-tool-use`, `post-tool-use`.
+Applies to: `preToolUse`, `postToolUse`.
 Pattern: `grep -q 'memory\.sh'` on stdin payload.
 
 ## Interface
 
-- **Hooks**: `user-prompt-submit`, `pre-tool-use`, `post-tool-use`, `stop`
+- **Hooks**: `userPromptSubmit`, `preToolUse`, `postToolUse`, `stop`
 - **Reads**: (none)
 - **Writes**: `spore` stage via `bash memory.sh`
 
@@ -45,16 +45,16 @@ bash hooks/memory.sh add \
   --data "$STDIN"
 ```
 
-### On user-prompt-submit
+### On userPromptSubmit
 
 - **Source**: `user`
 
-### On pre-tool-use
+### On preToolUse
 
 - **Source**: `agent`
 - Skips if payload contains `memory.sh`
 
-### On post-tool-use
+### On postToolUse
 
 - **Source**: `environment`
 - Skips if payload contains `memory.sh`
