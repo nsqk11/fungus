@@ -9,8 +9,11 @@ set -euo pipefail
 STDIN=$(cat)
 [ -z "$STDIN" ] && exit 0
 
+# Drop trivial prompts (≤ 5 characters)
+PROMPT=$(printf '%s' "$STDIN" | python3.12 -c "import sys,json; print(json.load(sys.stdin).get('prompt',''))")
+[ "${#PROMPT}" -le 5 ] && exit 0
+
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
   --hook userPromptSubmit \
-  --source user \
   --data "$STDIN"

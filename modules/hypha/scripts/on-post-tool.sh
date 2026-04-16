@@ -12,8 +12,11 @@ STDIN=$(cat)
 # Skip self-referential calls (auditd pattern: exclude own operations)
 printf '%s' "$STDIN" | grep -q 'memory\.sh' && exit 0
 
+# Only capture tool failures
+SUCCESS=$(printf '%s' "$STDIN" | python3.12 -c "import sys,json; r=json.load(sys.stdin).get('tool_response',{}); print(r.get('success','true') if isinstance(r,dict) else 'true')")
+[ "$SUCCESS" != "false" ] && exit 0
+
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
   --hook postToolUse \
-  --source environment \
   --data "$STDIN"

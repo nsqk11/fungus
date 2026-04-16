@@ -13,7 +13,6 @@ Flat JSON array. Each entry is one record.
     "timestamp": "2026-04-16T07:20:00Z",
     "stage": "spore",
     "hook": "postToolUse",
-    "source": "environment",
     "data": {},
     "summary": "",
     "keywords": [],
@@ -31,7 +30,6 @@ Flat JSON array. Each entry is one record.
 | `timestamp` | string | yes | ISO 8601 UTC |
 | `stage` | string | yes | `spore`, `nutrient`, `fruiting`, `network` |
 | `hook` | string | spore | Hook that produced this entry |
-| `source` | string | spore | `user`, `agent`, `environment` |
 | `data` | object | spore | Raw hook stdin, stored as-is |
 | `summary` | string | nutrient+ | Digest of the signal |
 | `keywords` | array | nutrient+ | For dedup and pattern detection |

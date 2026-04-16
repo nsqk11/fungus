@@ -15,5 +15,4 @@ printf '%s' "$STDIN" | grep -q 'memory\.sh' && exit 0
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
   --hook preToolUse \
-  --source agent \
   --data "$STDIN"

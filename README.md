@@ -64,24 +64,27 @@ extend into it, sense what's there, and feed the network.
 
 | Module | Role | When |
 |--------|------|------|
-| **Hypha** | Sense signals from user, agent, and environment | Every interaction |
+| **Hypha** | Sense signals, filter noise | Every interaction |
 | **Mycelium** | Digest spores into structured nutrients | Session end |
 | **Fruit** | Detect mature patterns, produce new skills | Session end |
 
 No manual intervention. The network grows silently in the background.
 
-### Sensing Dimensions
+### Sensing and Filtering
 
-Hyphae don't sense blindly — each hook is a different kind of soil:
+Hyphae don't capture blindly — structural filters discard noise at the source:
 
-| Soil | Hook | What Hyphae Detect |
-|------|------|--------------------|
-| **User** | `userPromptSubmit` | Habits, preferences, corrections, communication patterns |
-| **Agent** | `preToolUse` | Decision logic, tool selection, reasoning paths |
-| **Environment** | `postToolUse` | Tool failures, gotchas, environment limitations |
+| Hook | What Passes | What Gets Dropped |
+|------|-------------|-------------------|
+| `userPromptSubmit` | Prompts > 5 chars | Trivial acks ("ok", "嗯") |
+| `preToolUse` | Non-self-referential calls | Calls to `memory.sh` |
+| `postToolUse` | Tool failures only | Successful tool results |
+| `stop` | All assistant responses | Nothing |
 
-Three dimensions — user, agent, environment — give the network a complete picture
-of every interaction.
+At the end of each turn, Hypha aggregates the tool sequence into a single
+`toolChain` spore and removes the individual `preToolUse` spores.
+This gives Mycelium a clean signal: what the user asked, what tools were used,
+whether anything failed, and what the agent concluded.
 
 ### Data Flow
 
@@ -103,7 +106,7 @@ no central config:
 # @hook postToolUse
 # @priority 10
 # @module hypha
-# @writes spores
+# @writes spore
 # @description Sense tool errors from environment
 ```
 

@@ -57,6 +57,38 @@ Skip valueless spore:
 bash hooks/memory.sh update --id <id> --field stage --value skipped
 ```
 
+## Digest Direction
+
+Extract reusable knowledge from spores based on hook type.
+Skip everything that does not match these directions.
+
+### userPromptSubmit
+
+- User preferences and habits.
+- Architecture decisions and rationale.
+- Technical discoveries about tools or systems.
+- Bugs, defects, or anomalies.
+- Domain knowledge: naming rules, process conventions, reusable facts.
+
+### preToolUse
+
+- Aggregated into `toolChain` spores by Hypha at stop time.
+  Individual preToolUse spores are deleted after aggregation.
+
+### toolChain
+
+- Tool combination sequence for a task.
+  Produced by Hypha from preToolUse spores within a turn.
+
+### postToolUse
+
+- Error context: what failed, why, and surrounding conditions.
+  Only failure spores reach this stage (Hypha filters success out).
+
+### stop
+
+- AI analysis summaries: reasoning path, conclusions, decision rationale.
+
 ## Behavior
 
 ### On agentSpawn
@@ -70,7 +102,7 @@ bash hooks/memory.sh update --id <id> --field stage --value skipped
 ```
 <mycelium-digest>
 Undigested spores:
-  [id] [hook] [source]
+  [id] [hook]
   ...
 
 For each spore, review and run one of:

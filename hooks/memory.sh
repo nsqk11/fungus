@@ -26,12 +26,11 @@ _next_id() {
 
 # --- add ---
 cmd_add() {
-  local stage="" hook="" source="" data="{}"
+  local stage="" hook="" data="{}"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --stage)  stage="$2";  shift 2 ;;
       --hook)   hook="$2";   shift 2 ;;
-      --source) source="$2"; shift 2 ;;
       --data)   data="$2";   shift 2 ;;
       *) echo "Error: unknown option $1" >&2; exit 1 ;;
     esac
@@ -47,14 +46,12 @@ cmd_add() {
      --arg ts "$ts" \
      --arg stage "$stage" \
      --arg hook "$hook" \
-     --arg source "$source" \
      --argjson data "$data" \
     '. += [{
       id: $id,
       timestamp: $ts,
       stage: $stage,
       hook: $hook,
-      source: $source,
       data: $data,
       summary: "",
       keywords: [],
@@ -101,11 +98,10 @@ cmd_get() {
 
 # --- list ---
 cmd_list() {
-  local stage="" source="" hook=""
+  local stage="" hook=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --stage)  stage="$2";  shift 2 ;;
-      --source) source="$2"; shift 2 ;;
       --hook)   hook="$2";   shift 2 ;;
       *) echo "Error: unknown option $1" >&2; exit 1 ;;
     esac
@@ -114,11 +110,10 @@ cmd_list() {
   _ensure
   local filter="."
   [ -n "$stage" ]  && filter="$filter | select(.stage == \"$stage\")"
-  [ -n "$source" ] && filter="$filter | select(.source == \"$source\")"
   [ -n "$hook" ]   && filter="$filter | select(.hook == \"$hook\")"
 
   jq -r ".[] | $filter | \
-    \"\\(.id) \\(.stage) \\(.hook) \\(.source)\"" "$MEMORY_FILE"
+    \"\\(.id) \\(.stage) \\(.hook)\"" "$MEMORY_FILE"
 }
 
 # --- update ---

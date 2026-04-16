@@ -1,30 +1,22 @@
 ---
 name: hypha
-description: "[module] Capture raw hook payloads and store as spores. Do NOT filter, judge, or transform."
+description: "[module] Capture hook payloads as spores with structural filtering. Do NOT judge content value."
 ---
 
 # Hypha
 
-> Capture every hook's raw payload and store it as a spore.
+> Capture hook payloads and store as spores.
+> Apply structural filters to discard noise before writing.
 
 ## Boundary
 
 - **Does**:
   - Read stdin from every registered hook.
-  - Store the full payload as a spore via `bash memory.sh`.
-  - Exclude self-referential calls (see below).
+  - Apply structural filters per hook type.
+  - Store passing payloads as spores via `bash memory.sh`.
 - **Does not**:
-  - Filter, judge, or transform signal content.
+  - Judge content value (that is Mycelium's job).
   - Write to any stage other than `spore`.
-
-## Self-Referential Exclusion
-
-Like auditd excluding its own PID, Hypha excludes tool calls that
-operate on `memory.sh`. This prevents a feedback loop where digest
-operations (which call `memory.sh`) would generate new spores.
-
-Applies to: `preToolUse`, `postToolUse`.
-Pattern: `grep -q 'memory\.sh'` on stdin payload.
 
 ## Interface
 
@@ -32,33 +24,44 @@ Pattern: `grep -q 'memory\.sh'` on stdin payload.
 - **Reads**: (none)
 - **Writes**: `spore` stage via `bash memory.sh`
 
-## Behavior
+## Filters
 
-All hooks follow the same pattern:
-read stdin, forward the entire JSON as `--data`.
+Structural filters reduce noise before spore creation.
+Content-level value judgment remains in Mycelium.
+
+| Hook | Rule | Rationale |
+|------|------|-----------|
+| userPromptSubmit | Drop if `prompt` ≤ 5 chars | Exclude trivial acks |
+| preToolUse | Skip if payload contains `memory.sh` | Self-referential exclusion |
+| postToolUse | Skip if payload contains `memory.sh`; drop if `tool_response.success` ≠ `false` | Only errors carry diagnostic value |
+| stop | No filter | Captures AI analysis summaries |
+
+## Behavior
 
 ```bash
 bash hooks/memory.sh add \
   --stage spore \
   --hook <hook-name> \
-  --source <source> \
   --data "$STDIN"
 ```
 
 ### On userPromptSubmit
 
-- **Source**: `user`
+- Drop if `prompt` ≤ 5 characters.
 
 ### On preToolUse
 
-- **Source**: `agent`
-- Skips if payload contains `memory.sh`
+- Skip if payload contains `memory.sh`.
 
 ### On postToolUse
 
-- **Source**: `environment`
-- Skips if payload contains `memory.sh`
+- Skip if payload contains `memory.sh`.
+- Drop if `tool_response.success` is not `false`.
 
 ### On stop
 
-- **Source**: `agent`
+- Store assistant response.
+- Extract tool chain for the current turn:
+  find last `userPromptSubmit` timestamp, collect all `preToolUse`
+  tool names after it, delete those preToolUse spores,
+  write as a `toolChain` spore.
