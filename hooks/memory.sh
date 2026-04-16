@@ -157,12 +157,31 @@ cmd_update() {
   echo "OK: $id.$field"
 }
 
+# --- count ---
+cmd_count() {
+  local stage=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --stage) stage="$2"; shift 2 ;;
+      *) echo "Error: unknown option $1" >&2; exit 1 ;;
+    esac
+  done
+
+  _ensure
+  if [ -n "$stage" ]; then
+    jq --arg s "$stage" '[.[] | select(.stage == $s)] | length' "$MEMORY_FILE"
+  else
+    jq 'length' "$MEMORY_FILE"
+  fi
+}
+
 # --- dispatch ---
-case "${1:?Usage: memory.sh <add|delete|list|get|update> [options]}" in
+case "${1:?Usage: memory.sh <add|delete|list|get|update|count> [options]}" in
   add)    shift; cmd_add "$@" ;;
   delete) shift; cmd_delete "$@" ;;
   list)   shift; cmd_list "$@" ;;
   get)    shift; cmd_get "$@" ;;
   update) shift; cmd_update "$@" ;;
+  count)  shift; cmd_count "$@" ;;
   *)      echo "Error: unknown command $1" >&2; exit 1 ;;
 esac
