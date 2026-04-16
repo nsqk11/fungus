@@ -58,8 +58,8 @@ Declare only what is necessary.
 Must match script annotations (@hook, @writes).
 
 - **Hooks**: registered hook names.
-- **Reads**: mem.json partitions read. (none) if none.
-- **Writes**: mem.json partitions written. (none) if none.
+- **Reads**: memory.json partitions read. (none) if none.
+- **Writes**: memory.json partitions written. (none) if none.
 </description>
 </variant>
 

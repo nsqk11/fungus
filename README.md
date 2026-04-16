@@ -94,7 +94,7 @@ Hypha      Mycelium     Fruit    agent-spawn
 writes     writes       writes   reads
 ```
 
-Each module writes to its own partition in `mem.json`. Boundaries are declared
+Each module writes to its own partition in `memory.json`. Boundaries are declared
 in each script's annotations — no central config:
 
 ```python
