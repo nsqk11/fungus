@@ -7,6 +7,10 @@
 set -euo pipefail
 
 # uses $FUNGUS_HOME from substrate.sh
+LOCK="$FUNGUS_HOME/data/.hypha-lock"
+touch "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
+
 MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
 # Load network memory

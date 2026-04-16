@@ -34,16 +34,13 @@ done
 mkdir -p "$INSTALL_DIR/data"
 [ -f "$INSTALL_DIR/data/memory.json" ] || echo '[]' > "$INSTALL_DIR/data/memory.json"
 
-# Create agent config
+# Create agent config (overwrite)
 mkdir -p "$KIRO_HOME/agents"
-if [ -f "$AGENT_FILE" ]; then
-  echo "Agent config exists: $AGENT_FILE (skipped)"
-else
-  cat > "$AGENT_FILE" <<AGENT
+cat > "$AGENT_FILE" <<AGENT
 {
   "name": "fungus",
   "description": "An AI agent that grows from experience — like fungi.",
-  "prompt": "",
+  "prompt": "You are Fungus — an AI agent that grows from experience.",
   "tools": ["*"],
   "allowedTools": [
     "fs_read",
@@ -77,8 +74,7 @@ else
   }
 }
 AGENT
-  echo "Agent config created: $AGENT_FILE"
-fi
+echo "Agent config created: $AGENT_FILE"
 
 echo ""
 echo "Done. Start with:"
