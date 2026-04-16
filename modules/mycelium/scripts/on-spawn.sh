@@ -13,6 +13,9 @@ trap 'rm -f "$LOCK"' EXIT
 
 MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
+# Clean stale entries before loading
+bash "$MEMORY" clean
+
 # Load network memory
 network=$(bash "$MEMORY" list --stage network)
 if [ -n "$network" ]; then

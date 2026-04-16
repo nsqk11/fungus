@@ -157,6 +157,27 @@ cmd_update() {
   echo "OK: $id.$field"
 }
 
+# --- clean ---
+cmd_clean() {
+  _ensure
+
+  # Delete skipped and fruiting entries
+  jq '[.[] | select(.stage != "skipped" and .stage != "fruiting")]' \
+    "$MEMORY_FILE" > "$MEMORY_FILE.tmp" && _write
+
+  # Cap network at 50, keep newest
+  jq '
+    ([.[] | select(.stage == "network")] | length) as $n |
+    if $n > 50 then
+      ([.[] | select(.stage != "network")] +
+       ([.[] | select(.stage == "network")] |
+        sort_by(.timestamp) | .[-50:]))
+    else . end
+  ' "$MEMORY_FILE" > "$MEMORY_FILE.tmp" && _write
+
+  echo "OK: clean"
+}
+
 # --- count ---
 cmd_count() {
   local stage=""
@@ -176,12 +197,13 @@ cmd_count() {
 }
 
 # --- dispatch ---
-case "${1:?Usage: memory.sh <add|delete|list|get|update|count> [options]}" in
+case "${1:?Usage: memory.sh <add|delete|list|get|update|count|clean> [options]}" in
   add)    shift; cmd_add "$@" ;;
   delete) shift; cmd_delete "$@" ;;
   list)   shift; cmd_list "$@" ;;
   get)    shift; cmd_get "$@" ;;
   update) shift; cmd_update "$@" ;;
   count)  shift; cmd_count "$@" ;;
+  clean)  shift; cmd_clean "$@" ;;
   *)      echo "Error: unknown command $1" >&2; exit 1 ;;
 esac
