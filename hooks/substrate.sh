@@ -17,9 +17,14 @@ SCRIPTS=$(python3.12 "$REPO_ROOT/hooks/substrate.py" "$HOOK" "$REPO_ROOT")
 while IFS='|' read -r script module; do
   name=$(basename "$script")
   echo "[substrate] $HOOK → $name ($module)" >&2
-  if [ -n "$STDIN_DATA" ]; then
-    printf '%s' "$STDIN_DATA" | python3.12 "$script"
+  if [[ "$script" == *.py ]]; then
+    runner="python3.12"
   else
-    python3.12 "$script"
+    runner="bash"
+  fi
+  if [ -n "$STDIN_DATA" ]; then
+    printf '%s' "$STDIN_DATA" | $runner "$script"
+  else
+    $runner "$script"
   fi
 done <<< "$SCRIPTS"

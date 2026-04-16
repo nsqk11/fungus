@@ -32,7 +32,9 @@ def _resolve(hook: str, repo_root: Path) -> list[tuple[str, str, int]]:
         return []
 
     matches: list[tuple[str, str, int]] = []
-    for script in modules_dir.rglob("*.py"):
+    for script in modules_dir.rglob("*"):
+        if script.suffix not in (".py", ".sh"):
+            continue
         ann = _parse_annotations(script)
         if ann is None or ann["hook"] != hook:
             continue
