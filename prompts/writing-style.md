@@ -32,3 +32,11 @@ Writing standards for all documentation and prompts in this repository.
 - Keep paragraphs short.
 - Prefer tables over long prose for comparisons.
 - Prefer lists over paragraphs for enumerations.
+
+## Constraints
+
+- Do not invent arbitrary numeric limits (e.g., "max 5 items").
+- Constrain quality with principles ("keep focused", "be concise"),
+  not with counts.
+- Only use specific numbers when backed by an external standard
+  (e.g., Conventional Commits' 72-char summary).
