@@ -42,9 +42,12 @@ Flat JSON array. Each entry is one record.
 
 ```
 spore → nutrient → fruiting → network
+  ↓
+skipped
 ```
 
 A spore may produce multiple nutrients.
+A spore with no value is marked `skipped` — still stored, not reprocessed.
 Multiple nutrients may converge into one fruiting entry.
 A fruiting entry becomes a network entry when mature.
 
