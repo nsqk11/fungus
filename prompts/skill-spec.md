@@ -42,10 +42,11 @@ Type prefix in description: `[module]`, `[tool]`, or `[guide]`.
 Given the role above, what is this responsible for — and what is
 explicitly outside its scope?
 Every Does item becomes a contract that Behavior must fulfill.
-Every Does not item must name who handles it instead.
 
 - **Does**: core responsibilities. Start each with a verb.
-- **Does not**: key exclusions. Name the responsible party.
+- **Does not**: key exclusions.
+  Grown skills may name who handles it instead.
+  Core modules do not reference each other by name.
 </description>
 
 ## Interface
@@ -56,6 +57,7 @@ To fulfill the Boundary above, what hooks and data partitions
 are needed?
 Declare only what is necessary.
 Must match script annotations (@hook, @writes).
+Prefer `bash memory.sh` over direct file references.
 
 - **Hooks**: registered hook names.
 - **Reads**: memory.json partitions read. (none) if none.
@@ -87,12 +89,10 @@ When does this guide activate, and what does it relate to?
 
 <variant type="module">
 <description>
-One subsection per hook declared in Interface. Each covers:
-
-1. **Input** — stdin data structure for this hook.
-2. **Condition** — when to act, when to skip.
-3. **Output** — what gets written to which partition,
-   or injected into context.
+One subsection per hook declared in Interface.
+Describe what the module does at each hook.
+Include concrete `bash memory.sh` commands where applicable.
+If the module does not inspect stdin structure, omit Input.
 
 Every behavior must trace back to a Does item in Boundary.
 </description>
