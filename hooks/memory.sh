@@ -4,7 +4,8 @@
 set -euo pipefail
 
 FUNGUS_HOME="${FUNGUS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$FUNGUS_HOME/data"
+FUNGUS_AGENT="${FUNGUS_AGENT:-default}"
+DATA_DIR="$FUNGUS_HOME/data/agents/$FUNGUS_AGENT"
 MEMORY_FILE="$DATA_DIR/memory.json"
 
 _ensure() {

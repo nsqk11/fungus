@@ -30,9 +30,10 @@ for dir in hooks modules prompts skills; do
   [ -d "$REPO_ROOT/$dir" ] && cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
 done
 
-# Ensure data directory and memory.json
-mkdir -p "$INSTALL_DIR/data"
-[ -f "$INSTALL_DIR/data/memory.json" ] || echo '[]' > "$INSTALL_DIR/data/memory.json"
+# Ensure per-agent data directory
+mkdir -p "$INSTALL_DIR/data/agents/fungus"
+[ -f "$INSTALL_DIR/data/agents/fungus/memory.json" ] \
+  || echo '[]' > "$INSTALL_DIR/data/agents/fungus/memory.json"
 
 # Create agent config (overwrite)
 mkdir -p "$KIRO_HOME/agents"
@@ -57,19 +58,19 @@ cat > "$AGENT_FILE" <<AGENT
   ],
   "hooks": {
     "agentSpawn": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh agent-spawn" }
+      { "command": "bash $INSTALL_DIR/hooks/substrate.sh agent-spawn fungus" }
     ],
     "userPromptSubmit": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh user-prompt-submit" }
+      { "command": "bash $INSTALL_DIR/hooks/substrate.sh user-prompt-submit fungus" }
     ],
     "preToolUse": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh pre-tool-use" }
+      { "command": "bash $INSTALL_DIR/hooks/substrate.sh pre-tool-use fungus" }
     ],
     "postToolUse": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh post-tool-use" }
+      { "command": "bash $INSTALL_DIR/hooks/substrate.sh post-tool-use fungus" }
     ],
     "stop": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh stop" }
+      { "command": "bash $INSTALL_DIR/hooks/substrate.sh stop fungus" }
     ]
   }
 }

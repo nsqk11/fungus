@@ -4,8 +4,9 @@
 # Usage: substrate.sh <hook-name> [stdin-data]
 set -euo pipefail
 
-HOOK="${1:?Usage: substrate.sh <hook-name>}"
+HOOK="${1:?Usage: substrate.sh <hook-name> [agent-name]}"
 export FUNGUS_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+export FUNGUS_AGENT="${2:-default}"
 
 STDIN_DATA=""
 [ ! -t 0 ] && STDIN_DATA=$(cat)
