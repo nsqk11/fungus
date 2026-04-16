@@ -122,8 +122,15 @@ Skills are the mushrooms — visible outputs of the underground network.
 
 ```
 fungus/
+├── assets/                      Images
+├── data/
+│   └── agents/<name>/           Per-agent memory (gitignored)
+│       └── memory.json
 ├── hooks/
-│   └── substrate.sh             Signal conductor — routes hooks to modules
+│   ├── substrate.sh             Signal conductor — routes hooks to modules
+│   ├── substrate.py             Scan annotations, match hook, sort by priority
+│   ├── memory.sh                CRUD operations for memory.json
+│   └── README.md                Hook payload reference
 ├── modules/
 │   ├── hypha/                   Sense — explore and detect signals
 │   │   ├── SKILL.md
