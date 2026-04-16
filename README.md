@@ -94,8 +94,11 @@ Hypha      Mycelium     Fruit    agent-spawn
 writes     writes       writes   reads
 ```
 
-Each module writes to its own partition in `memory.json`. Boundaries are declared
-in each script's annotations — no central config:
+Each module writes to its own partition in the agent's `memory.json`.
+Memory is per-agent — each agent configured in `~/.kiro/agents/` gets its own
+`data/agents/<name>/memory.json`, so multiple agents can run concurrently
+without conflict. Boundaries are declared in each script's annotations —
+no central config:
 
 ```python
 # @hook post-tool-use
