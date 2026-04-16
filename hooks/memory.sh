@@ -4,12 +4,9 @@
 set -euo pipefail
 
 FUNGUS_HOME="${FUNGUS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
-FUNGUS_AGENT="${FUNGUS_AGENT:-default}"
-DATA_DIR="$FUNGUS_HOME/data/agents/$FUNGUS_AGENT"
-MEMORY_FILE="$DATA_DIR/memory.json"
+MEMORY_FILE="$FUNGUS_HOME/data/memory.json"
 
 _ensure() {
-  mkdir -p "$DATA_DIR"
   [ -f "$MEMORY_FILE" ] || echo '[]' > "$MEMORY_FILE"
 }
 

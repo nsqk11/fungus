@@ -6,11 +6,11 @@
 # @description Capture tool result as spore
 set -euo pipefail
 
-[ -f "$FUNGUS_HOME/data/.hypha-lock" ] && exit 0
-
-# uses $FUNGUS_HOME from substrate.sh
 STDIN=$(cat)
 [ -z "$STDIN" ] && exit 0
+
+# Skip self-referential calls (auditd pattern: exclude own operations)
+printf '%s' "$STDIN" | grep -q 'memory\.sh' && exit 0
 
 bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \

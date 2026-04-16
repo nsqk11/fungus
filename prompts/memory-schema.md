@@ -53,7 +53,4 @@ A fruiting entry becomes a network entry when mature.
 
 ## File Location
 
-`data/agents/<agent-id>/memory.json` — per-agent, gitignored.
-
-Agent ID comes from the second argument to `substrate.sh`.
-Falls back to `default` when omitted.
+`data/memory.json` — single shared store, gitignored.

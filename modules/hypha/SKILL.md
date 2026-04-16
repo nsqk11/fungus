@@ -12,9 +12,19 @@ description: "[module] Capture raw hook payloads and store as spores. Do NOT fil
 - **Does**:
   - Read stdin from every registered hook.
   - Store the full payload as a spore via `bash memory.sh`.
+  - Exclude self-referential calls (see below).
 - **Does not**:
-  - Filter, judge, or transform signals.
+  - Filter, judge, or transform signal content.
   - Write to any stage other than `spore`.
+
+## Self-Referential Exclusion
+
+Like auditd excluding its own PID, Hypha excludes tool calls that
+operate on `memory.sh`. This prevents a feedback loop where digest
+operations (which call `memory.sh`) would generate new spores.
+
+Applies to: `pre-tool-use`, `post-tool-use`.
+Pattern: `grep -q 'memory\.sh'` on stdin payload.
 
 ## Interface
 
@@ -42,10 +52,12 @@ bash hooks/memory.sh add \
 ### On pre-tool-use
 
 - **Source**: `agent`
+- Skips if payload contains `memory.sh`
 
 ### On post-tool-use
 
 - **Source**: `environment`
+- Skips if payload contains `memory.sh`
 
 ### On stop
 

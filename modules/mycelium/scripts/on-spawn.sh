@@ -6,12 +6,6 @@
 # @description Remind about undigested spores
 set -euo pipefail
 
-# uses $FUNGUS_HOME from substrate.sh
-LOCK="$FUNGUS_HOME/data/.hypha-lock"
-mkdir -p "$(dirname "$LOCK")"
-touch "$LOCK"
-trap 'rm -f "$LOCK"' EXIT
-
 MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
 # Clean stale entries before loading
