@@ -11,11 +11,14 @@ MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 # Clean stale entries before loading
 bash "$MEMORY" clean
 
-# Load network memory
-network=$(bash "$MEMORY" list --stage network)
-if [ -n "$network" ]; then
+# Load network memory with summaries
+network_ids=$(bash "$MEMORY" list --stage network | awk '{print $1}')
+if [ -n "$network_ids" ]; then
   echo "<memory>"
-  echo "$network"
+  for id in $network_ids; do
+    summary=$(bash "$MEMORY" get "$id" | python3 -c "import sys,json; print(json.load(sys.stdin).get('summary',''))" 2>/dev/null)
+    [ -n "$summary" ] && echo "- $summary"
+  done
   echo "</memory>"
 fi
 
