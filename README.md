@@ -94,10 +94,9 @@ Hypha      Mycelium     Fruit    agentSpawn
 writes     writes       writes   reads
 ```
 
-Each module writes to its own partition in the agent's `memory.json`.
-Memory is per-agent — each agent configured in `~/.kiro/agents/` gets its own
-`data/agents/<name>/memory.json`, so multiple agents can run concurrently
-without conflict. Boundaries are declared in each script's annotations —
+Each module writes to its own partition in `memory.json`.
+Memory is shared — a single `data/memory.json` serves all agents.
+Boundaries are declared in each script's annotations —
 no central config:
 
 ```python
@@ -124,10 +123,9 @@ Skills are the mushrooms — visible outputs of the underground network.
 fungus/
 ├── assets/                      Images
 ├── data/
-│   └── agents/<name>/           Per-agent memory (gitignored)
-│       └── memory.json
+│   └── memory.json              Shared memory (gitignored)
 ├── hooks/
-│   ├── substrate.sh             Signal conductor — routes hooks to modules
+│   ├── substrate.sh             Signal conductor — reads hook from stdin, routes to modules
 │   ├── substrate.py             Scan annotations, match hook, sort by priority
 │   ├── memory.sh                CRUD operations for memory.json
 │   └── README.md                Hook payload reference
