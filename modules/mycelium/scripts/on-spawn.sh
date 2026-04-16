@@ -8,6 +8,7 @@ set -euo pipefail
 
 # uses $FUNGUS_HOME from substrate.sh
 LOCK="$FUNGUS_HOME/data/.hypha-lock"
+mkdir -p "$(dirname "$LOCK")"
 touch "$LOCK"
 trap 'rm -f "$LOCK"' EXIT
 
