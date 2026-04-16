@@ -14,35 +14,33 @@ When Google Style does not cover a case, choose the more readable option.
 
 ## Design Principles
 
-Apply these seven principles to all code.
-Listed in order of priority —
-when two conflict, the higher one wins.
+Apply these principles to all code.
 
-### 1. KISS — Keep It Simple
+### KISS — Keep It Simple
 
 Write the simplest solution that works.
 If code needs a comment to explain *what* it does (not *why*),
 refactor until it speaks for itself.
 
-### 2. YAGNI — You Aren't Gonna Need It
+### YAGNI — You Aren't Gonna Need It
 
 Do not build for hypothetical future requirements.
 Implement what is needed today.
 Simple code is easy to change when the future arrives.
 
-### 3. DRY — Don't Repeat Yourself
+### DRY — Don't Repeat Yourself
 
 Give every piece of knowledge a single, authoritative representation.
 If the same logic appears twice, extract it.
 If the same constant appears twice, name it.
 
-### 4. SoC — Separation of Concerns
+### SoC — Separation of Concerns
 
 Give each file, function, and module one reason to change.
 Keep parsing, logic, and I/O in separate functions.
 Split a module that does two things.
 
-### 5. SOLID
+### SOLID
 
 - **Single Responsibility**: one function, one job.
 - **Open/Closed**: extend through composition, not modification.
@@ -50,13 +48,13 @@ Split a module that does two things.
 - **Interface Segregation**: depend on narrow interfaces.
 - **Dependency Inversion**: depend on abstractions.
 
-### 6. LoD — Law of Demeter
+### LoD — Law of Demeter
 
 Only talk to direct dependencies.
 Pass data, not deep object graphs.
 If you see `a.b.c.d`, refactor.
 
-### 7. COI — Composition Over Inheritance
+### COI — Composition Over Inheritance
 
 Build behavior by combining small, focused functions.
 Prefer has-a over is-a.

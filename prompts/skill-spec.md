@@ -4,24 +4,28 @@ Writing standard for all SKILL.md files in Fungus — modules and grown skills.
 
 ## Rules
 
-- Voice: imperative. "Sense signals", not "This module senses signals".
+- Voice: imperative.
+  "Sense signals", not "This module senses signals".
 - Language: English only.
-- Length: keep sections focused.
-  If Boundary has more than 5 Does items, split the module.
+- Keep sections focused.
+  If a Boundary list grows unwieldy, the module has too many
+  responsibilities — split it.
 - References: backtick + name (`mycelium`), not file paths.
 - After writing: remove all `<description>` and `<variant>` tags.
 
 ## Template
 
-Copy the skeleton below. Choose one variant per section where marked.
-Fill each section following its `<description>` guidance, then remove the tags.
+Copy the skeleton below.
+Choose one variant per section where marked.
+Fill each section following its `<description>` guidance,
+then remove the tags.
 
 ---
 
 ````markdown
 ---
 name: <kebab-case, must match directory name>
-description: "[type] <One sentence. Include trigger keywords and Do NOT exclusions. Max 200 chars.>"
+description: "[type] <Concise one-sentence summary. Include trigger keywords and Do NOT exclusions.>"
 ---
 ````
 
@@ -35,20 +39,23 @@ Type prefix in description: `[module]`, `[tool]`, or `[guide]`.
 ## Boundary
 
 <description>
-Given the role above, what is this responsible for — and what is explicitly
-outside its scope? Every Does item becomes a contract that Behavior must
-fulfill. Every Does not item must name who handles it instead.
+Given the role above, what is this responsible for — and what is
+explicitly outside its scope?
+Every Does item becomes a contract that Behavior must fulfill.
+Every Does not item must name who handles it instead.
 
-- **Does**: 3-5 items. Start each with a verb.
-- **Does not**: 2-3 items. Name the responsible party.
+- **Does**: core responsibilities. Start each with a verb.
+- **Does not**: key exclusions. Name the responsible party.
 </description>
 
 ## Interface
 
 <variant type="module">
 <description>
-To fulfill the Boundary above, what hooks and data partitions are needed?
-Declare only what is necessary. Must match script annotations (@hook, @writes).
+To fulfill the Boundary above, what hooks and data partitions
+are needed?
+Declare only what is necessary.
+Must match script annotations (@hook, @writes).
 
 - **Hooks**: registered hook names.
 - **Reads**: mem.json partitions read. (none) if none.
@@ -58,7 +65,8 @@ Declare only what is necessary. Must match script annotations (@hook, @writes).
 
 <variant type="tool">
 <description>
-What commands does this tool expose, and what are their input/output contracts?
+What commands does this tool expose, and what are their
+input/output contracts?
 
 - **Commands**: CLI commands or script entry points.
 - **Input**: expected input formats (file types, stdin structure).
@@ -83,7 +91,8 @@ One subsection per hook declared in Interface. Each covers:
 
 1. **Input** — stdin data structure for this hook.
 2. **Condition** — when to act, when to skip.
-3. **Output** — what gets written to which partition, or injected into context.
+3. **Output** — what gets written to which partition,
+   or injected into context.
 
 Every behavior must trace back to a Does item in Boundary.
 </description>
@@ -103,7 +112,8 @@ Every command must trace back to a Does item in Boundary.
 
 <variant type="guide">
 <description>
-One subsection per trigger scenario declared in Interface. Each covers:
+One subsection per trigger scenario declared in Interface.
+Each covers:
 
 1. **Situation** — what the user is trying to do.
 2. **Guidance** — what to do and in what order.

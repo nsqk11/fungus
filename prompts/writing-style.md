@@ -29,6 +29,6 @@ Writing standards for all documentation and prompts in this repository.
 ## Structure
 
 - Lead with the most important information.
-- Keep paragraphs ≤ 3 sentences.
+- Keep paragraphs short.
 - Prefer tables over long prose for comparisons.
 - Prefer lists over paragraphs for enumerations.
