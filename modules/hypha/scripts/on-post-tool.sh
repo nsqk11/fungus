@@ -6,11 +6,11 @@
 # @description Capture tool result as spore
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+# uses $FUNGUS_HOME from substrate.sh
 STDIN=$(cat)
 [ -z "$STDIN" ] && exit 0
 
-bash "$REPO_ROOT/hooks/memory.sh" add \
+bash "$FUNGUS_HOME/hooks/memory.sh" add \
   --stage spore \
   --hook post-tool-use \
   --source environment \

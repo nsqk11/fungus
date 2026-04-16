@@ -6,8 +6,8 @@
 # @description Remind about mature nutrient patterns
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-MEMORY="$REPO_ROOT/hooks/memory.sh"
+# uses $FUNGUS_HOME from substrate.sh
+MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
 # Check for nutrients
 count=$(bash "$MEMORY" count --stage nutrient)

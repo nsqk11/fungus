@@ -5,12 +5,13 @@
 set -euo pipefail
 
 HOOK="${1:?Usage: substrate.sh <hook-name>}"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export FUNGUS_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+
 STDIN_DATA=""
 [ ! -t 0 ] && STDIN_DATA=$(cat)
 
 # Python resolves which scripts to run and in what order
-SCRIPTS=$(python3.12 "$REPO_ROOT/hooks/substrate.py" "$HOOK" "$REPO_ROOT")
+SCRIPTS=$(python3.12 "$FUNGUS_HOME/hooks/substrate.py" "$HOOK" "$FUNGUS_HOME")
 [ -z "$SCRIPTS" ] && exit 0
 
 # Execute each script, forwarding stdin

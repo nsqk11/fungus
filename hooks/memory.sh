@@ -3,8 +3,8 @@
 # Usage: memory.sh <add|delete|list|get|update> [options]
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DATA_DIR="$REPO_ROOT/data"
+FUNGUS_HOME="${FUNGUS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
+DATA_DIR="$FUNGUS_HOME/data"
 MEMORY_FILE="$DATA_DIR/memory.json"
 
 _ensure() {

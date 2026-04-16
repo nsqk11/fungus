@@ -6,8 +6,8 @@
 # @description Remind about undigested spores
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-MEMORY="$REPO_ROOT/hooks/memory.sh"
+# uses $FUNGUS_HOME from substrate.sh
+MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
 # Load network memory
 network=$(bash "$MEMORY" list --stage network)
