@@ -40,5 +40,6 @@ Respect partition boundaries:
 ## Standards
 
 Follow [coding-style.md](coding-style.md) when writing code.
+Follow [writing-style.md](writing-style.md) when writing documentation or prompts.
 Follow [skill-spec.md](skill-spec.md) when writing SKILL.md.
 Do not deviate without explicit user approval.
