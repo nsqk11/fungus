@@ -8,17 +8,14 @@ set -euo pipefail
 
 MEMORY="$FUNGUS_HOME/hooks/memory.sh"
 
-# Clean stale entries before loading
-bash "$MEMORY" clean
-
 # Load network memory with summaries
-network_ids=$(bash "$MEMORY" list --stage network | awk '{print $1}')
-if [ -n "$network_ids" ]; then
+summaries=$(bash "$MEMORY" query --jq \
+  '[.[] | select(.stage == "network") | .summary | select(. != "")] | .[]')
+if [ -n "$summaries" ]; then
   echo "<memory>"
-  for id in $network_ids; do
-    summary=$(bash "$MEMORY" get "$id" | python3 -c "import sys,json; print(json.load(sys.stdin).get('summary',''))" 2>/dev/null)
-    [ -n "$summary" ] && echo "- $summary"
-  done
+  while IFS= read -r line; do
+    echo "- $line"
+  done <<< "$summaries"
   echo "</memory>"
 fi
 

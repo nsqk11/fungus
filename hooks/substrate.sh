@@ -13,6 +13,11 @@ STDIN_DATA=""
 HOOK=$(printf '%s' "$STDIN_DATA" | python3.12 -c "import sys,json; print(json.load(sys.stdin).get('hook_event_name',''))")
 [ -z "$HOOK" ] && exit 0
 
+# Clean stale entries before module dispatch on agentSpawn
+if [ "$HOOK" = "agentSpawn" ]; then
+  bash "$FUNGUS_HOME/hooks/memory.sh" clean >/dev/null 2>&1
+fi
+
 # Python resolves which scripts to run and in what order
 SCRIPTS=$(python3.12 "$FUNGUS_HOME/hooks/substrate.py" "$HOOK" "$FUNGUS_HOME")
 [ -z "$SCRIPTS" ] && exit 0

@@ -35,12 +35,13 @@ Soil ───→ Hypha ───→ Mycelium ───→ Fruit
 ```
 
 Respect partition boundaries:
-- Hypha writes `spores` only.
-  Reads nothing.
-- Mycelium reads `spores`.
-  Writes `nutrients` only.
-- Fruit reads `nutrients`.
-  Writes `fruiting` and `network` only.
+- Hypha writes `spore` stage only.
+  Reads `spore` stage for tool chain aggregation.
+- Mycelium reads `spore` and `network` stages.
+  Writes `nutrient` and `skipped` stages only.
+- Fruit reads `nutrient` stage.
+  Writes `fruiting` and `network` stages only.
+- Substrate runs `clean` before modules on `agentSpawn`.
 - Never write across partition boundaries.
 
 ## Standards

@@ -1,6 +1,8 @@
 ---
 name: fruit
-description: "[module] Detect mature patterns in nutrients and produce new skills. Do NOT capture signals or digest spores."
+description: "[module] Detect mature patterns in nutrients
+  and produce new skills. Do NOT capture signals
+  or digest spores."
 ---
 
 # Fruit
@@ -10,10 +12,10 @@ description: "[module] Detect mature patterns in nutrients and produce new skill
 ## Boundary
 
 - **Does**:
-  - List nutrient entries via `bash memory.sh`.
-  - Detect recurring keywords across nutrients.
-  - Prompt the agent to produce a new skill when a pattern matures.
-  - Upgrade mature nutrients to `fruiting` or `network` stage.
+  - Count nutrient entries via `bash memory.sh`.
+  - Prompt the agent to review nutrients for patterns.
+  - Guide the agent to upgrade nutrients to `fruiting`
+    or `network` stage.
 - **Does not**:
   - Capture raw signals.
   - Digest spores into nutrients.
@@ -22,7 +24,8 @@ description: "[module] Detect mature patterns in nutrients and produce new skill
 
 - **Hooks**: `agentSpawn`
 - **Reads**: `nutrient` stage via `bash memory.sh`
-- **Writes**: updates `nutrient` → `fruiting` or `network` via `bash memory.sh`
+- **Writes**: updates `nutrient` → `fruiting` or `network`
+  via `bash memory.sh`
 
 ## Storage Commands
 
@@ -55,13 +58,19 @@ bash hooks/memory.sh update --id <id> --field stage --value fruiting
 
 ### On agentSpawn
 
-1. Run `bash hooks/memory.sh list --stage nutrient`.
-   If no nutrients, skip silently.
-2. Check for recurring keywords across nutrients.
-   If no pattern, skip silently.
-3. Output nutrient list for the agent to review.
+The script outputs a reminder for the agent.
+The agent performs pattern detection in-session.
 
-The agent decides:
-- Single insight → upgrade to `network` (permanent memory).
+1. Count nutrients via `bash memory.sh count --stage nutrient`.
+   If zero, skip silently.
+2. Output `<fruit-reminder>` prompting the agent
+   to ask the user about skill emergence review.
+
+The agent, when confirmed by the user, reads this SKILL.md
+and reviews nutrients using the Storage Commands above.
+
+Pattern detection criteria (applied by the agent):
+- Check for recurring keywords across nutrients.
+- Single insight → upgrade to `network`.
 - Recurring pattern → upgrade to `fruiting`,
   then create a new skill in `skills/` following `skill-spec.md`.

@@ -28,26 +28,33 @@ Flat JSON array. Each entry is one record.
 |-------|------|----------|-------------|
 | `id` | string | yes | `YYYYMMDD` + 3-digit sequence |
 | `timestamp` | string | yes | ISO 8601 UTC |
-| `stage` | string | yes | `spore`, `nutrient`, `fruiting`, `network` |
+| `stage` | string | yes | See Stage enum below |
 | `hook` | string | spore | Hook that produced this entry |
 | `data` | object | spore | Raw hook stdin, stored as-is |
 | `summary` | string | nutrient+ | Digest of the signal |
 | `keywords` | array | nutrient+ | For dedup and pattern detection |
 | `refs` | array | nutrient+ | IDs of upstream entries |
-| `category` | string | network | `Tool Usage`, `Preferences`, etc. |
+| `category` | string | network | Classification label |
+
+## Stage Enum
+
+`spore`, `nutrient`, `fruiting`, `network`, `skipped`.
 
 ## Lifecycle
 
 ```
-spore → nutrient → fruiting → network
-  ↓
-skipped
+spore → nutrient → network    (permanent memory)
+spore → nutrient → fruiting   (skill candidate, cleaned after use)
+spore → skipped               (no value, cleaned)
 ```
 
-A spore may produce multiple nutrients.
-A spore with no value is marked `skipped` — still stored, not reprocessed.
-Multiple nutrients may converge into one fruiting entry.
-A fruiting entry becomes a network entry when mature.
+Each transition is an in-place update on the same entry.
+One spore becomes one nutrient.
+One nutrient becomes one network or one fruiting entry.
+
+Substrate runs `clean` on `agentSpawn` before any module.
+Clean deletes `skipped` and `fruiting` entries
+and caps `network` at the newest entries when over limit.
 
 ## File Location
 

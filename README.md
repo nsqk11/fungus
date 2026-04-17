@@ -65,10 +65,12 @@ extend into it, sense what's there, and feed the network.
 | Module | Role | When |
 |--------|------|------|
 | **Hypha** | Sense signals, filter noise | Every interaction |
-| **Mycelium** | Digest spores into structured nutrients | Session end |
-| **Fruit** | Detect mature patterns, produce new skills | Session end |
+| **Mycelium** | Digest spores into structured nutrients | Session start |
+| **Fruit** | Detect mature patterns, produce new skills | Session start |
 
-No manual intervention. The network grows silently in the background.
+Hyphae sense silently in the background.
+Mycelium and Fruit prompt the agent at session start —
+the user decides when to digest or review.
 
 ### Sensing and Filtering
 
@@ -88,17 +90,21 @@ whether anything failed, and what the agent concluded.
 
 ### Data Flow
 
-Nutrients flow in one direction — from raw spores to mature network memory:
+Nutrients flow in one direction — from raw spores to mature memory:
 
 ```
-spores → nutrients → fruiting → network
-  ↑          ↑           ↑          ↑
-Hypha      Mycelium     Fruit    agentSpawn
-writes     writes       writes   reads
+spore → nutrient → network    (permanent memory)
+spore → nutrient → fruiting   (skill candidate)
+spore → skipped               (no value)
+  ↑        ↑          ↑           ↑
+Hypha    Mycelium    Fruit     substrate
+writes   writes      writes    cleans
 ```
 
 Each module writes to its own partition in `memory.json`.
 Memory is shared — a single `data/memory.json` serves all agents.
+Substrate runs `clean` on `agentSpawn` before any module —
+removing `skipped` and consumed `fruiting` entries.
 Boundaries are declared in each script's annotations —
 no central config:
 
@@ -106,11 +112,13 @@ no central config:
 # @hook postToolUse
 # @priority 10
 # @module hypha
+# @reads spore
 # @writes spore
 # @description Sense tool errors from environment
 ```
 
-The substrate scans these annotations at runtime to enforce permissions.
+The substrate scans these annotations at runtime
+to route hooks to the correct scripts.
 
 ## 🍄 Grown Skills
 

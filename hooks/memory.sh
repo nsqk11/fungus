@@ -7,6 +7,7 @@ FUNGUS_HOME="${FUNGUS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 MEMORY_FILE="$FUNGUS_HOME/data/memory.json"
 
 _ensure() {
+  [ -d "$(dirname "$MEMORY_FILE")" ] || mkdir -p "$(dirname "$MEMORY_FILE")"
   [ -f "$MEMORY_FILE" ] || echo '[]' > "$MEMORY_FILE"
 }
 
@@ -17,11 +18,11 @@ _write() {
 _next_id() {
   local today
   today=$(date -u +%Y%m%d)
-  local seq
-  seq=$(jq -r --arg d "$today" \
-    '[.[] | select(.id | startswith($d))] | length' \
+  local max
+  max=$(jq -r --arg d "$today" \
+    '[.[] | select(.id | startswith($d)) | .id[$d | length:] | tonumber] | max // 0' \
     "$MEMORY_FILE")
-  printf '%s%03d' "$today" "$((seq + 1))"
+  printf '%s%03d' "$today" "$((max + 1))"
 }
 
 # --- add ---
@@ -132,6 +133,11 @@ cmd_update() {
 
   _ensure
 
+  # Verify ID exists
+  local found
+  found=$(jq --arg id "$id" '[.[] | select(.id == $id)] | length' "$MEMORY_FILE")
+  [ "$found" = "0" ] && { echo "Error: $id not found" >&2; exit 1; }
+
   # Detect JSON value vs plain string
   if echo "$value" | jq . >/dev/null 2>&1; then
     jq --arg id "$id" \
@@ -150,16 +156,27 @@ cmd_update() {
   echo "OK: $id.$field"
 }
 
+# --- query ---
+cmd_query() {
+  local filter=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --jq) filter="$2"; shift 2 ;;
+      *) echo "Error: unknown option $1" >&2; exit 1 ;;
+    esac
+  done
+  [ -z "$filter" ] && { echo "Error: --jq required" >&2; exit 1; }
+
+  _ensure
+  jq -r "$filter" "$MEMORY_FILE"
+}
+
 # --- clean ---
 cmd_clean() {
   _ensure
 
-  # Delete skipped and fruiting entries
-  jq '[.[] | select(.stage != "skipped" and .stage != "fruiting")]' \
-    "$MEMORY_FILE" > "$MEMORY_FILE.tmp" && _write
-
-  # Cap network at 50, keep newest
   jq '
+    [.[] | select(.stage != "skipped" and .stage != "fruiting")] |
     ([.[] | select(.stage == "network")] | length) as $n |
     if $n > 50 then
       ([.[] | select(.stage != "network")] +
@@ -190,12 +207,13 @@ cmd_count() {
 }
 
 # --- dispatch ---
-case "${1:?Usage: memory.sh <add|delete|list|get|update|count|clean> [options]}" in
+case "${1:?Usage: memory.sh <add|delete|list|get|update|query|count|clean> [options]}" in
   add)    shift; cmd_add "$@" ;;
   delete) shift; cmd_delete "$@" ;;
   list)   shift; cmd_list "$@" ;;
   get)    shift; cmd_get "$@" ;;
   update) shift; cmd_update "$@" ;;
+  query)  shift; cmd_query "$@" ;;
   count)  shift; cmd_count "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
   *)      echo "Error: unknown command $1" >&2; exit 1 ;;
