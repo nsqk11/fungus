@@ -20,7 +20,9 @@ bash "$MEMORY" add --stage spore --hook stop --data "$STDIN"
 CHAIN=$(bash "$MEMORY" query --jq '
   ([.[] | select(.hook == "userPromptSubmit")] | last | .id) as $bid |
   if $bid then
-    [.[] | select(.hook == "preToolUse" and .id > $bid) | .data.tool_name] |
+    [.[] | select(.hook == "preToolUse" and .id > $bid)
+      | .data.tool_name
+      | select(. != "fs_read" and . != "fs_write" and . != "grep" and . != "glob" and . != "code" and . != "todo_list")] |
     if length > 0 then join(",") else empty end
   else empty end
 ')

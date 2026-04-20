@@ -36,7 +36,7 @@ Content-level value judgment remains in the digest stage.
 | Hook | Rule | Rationale |
 |------|------|-----------|
 | `userPromptSubmit` | Drop if `prompt` ≤ 5 chars | Trivial acks |
-| `preToolUse` | Skip if payload contains `memory.sh` | Self-referential |
+| `preToolUse` | Skip if `memory.sh`; skip if tool is `fs_read`, `fs_write`, `grep`, `glob`, `code`, or `todo_list` | Self-referential; pure read/write and internal management |
 | `postToolUse` | Skip if `memory.sh`; drop if not failure | Errors only |
 | `stop` | No filter | AI analysis summaries |
 
@@ -50,6 +50,8 @@ Store as spore.
 ### On preToolUse
 
 Skip if payload contains `memory.sh`.
+Skip if tool is `fs_read`, `fs_write`, `grep`, `glob`,
+`code`, or `todo_list`.
 Store as spore.
 
 ### On postToolUse
