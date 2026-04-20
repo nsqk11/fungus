@@ -30,10 +30,11 @@ CHAIN=$(bash "$MEMORY" query --jq '
 [ -z "$CHAIN" ] && exit 0
 
 # Delete individual preToolUse spores that were aggregated
-bash "$MEMORY" query --jq '
+mapfile -t pids < <(bash "$MEMORY" query --jq '
   ([.[] | select(.hook == "userPromptSubmit")] | last | .id) as $bid |
   [.[] | select(.hook == "preToolUse" and .id > $bid) | .id] | .[]
-' | while read -r pid; do
+')
+for pid in "${pids[@]}"; do
   bash "$MEMORY" delete "$pid" >/dev/null 2>&1
 done
 

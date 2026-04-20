@@ -79,7 +79,7 @@ Hyphae don't capture blindly — structural filters discard noise at the source:
 | Hook | What Passes | What Gets Dropped |
 |------|-------------|-------------------|
 | `userPromptSubmit` | Prompts > 5 chars | Trivial acks ("ok", "嗯") |
-| `preToolUse` | Non-self-referential calls | Calls to `memory.sh` |
+| `preToolUse` | Non-self-referential, non-read/write calls | `memory.sh` calls; `fs_read`, `fs_write`, `grep`, `glob`, `code`, `todo_list` |
 | `postToolUse` | Tool failures only | Successful tool results |
 | `stop` | All assistant responses | Nothing |
 
@@ -119,7 +119,6 @@ no central config:
 
 The substrate scans these annotations at runtime
 to route hooks to the correct scripts.
-
 ## 🍄 Grown Skills
 
 Skills are the mushrooms — visible outputs of the underground network.
