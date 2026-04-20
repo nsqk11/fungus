@@ -125,6 +125,7 @@ Skills are the mushrooms — visible outputs of the underground network.
 
 | Skill | Description |
 |-------|-------------|
+| [atlassian-api](skills/atlassian-api/) | Unified REST API client for Confluence and Jira |
 | [docx-toolkit](skills/docx-toolkit/) | JSON-based surgical editing for `.docx` files |
 
 ## 📁 Structure
@@ -150,6 +151,7 @@ fungus/
 │       ├── SKILL.md
 │       └── scripts/
 ├── skills/                      Mushrooms — grown by the network
+│   ├── atlassian-api/
 │   └── docx-toolkit/
 ├── prompts/                     Shared prompt frameworks
 ├── install.sh
