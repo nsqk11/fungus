@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
 """Unified Atlassian REST API client.
 
 Usage:
@@ -28,6 +28,7 @@ import client
 import convert
 import tokens
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request
 from urllib.request import urlopen
 
@@ -133,7 +134,6 @@ def cmd_search(domain, query, space=None):
     cql = f'type=page AND text~"{query}"'
     if space:
         cql = f"space={space} AND {cql}"
-    from urllib.parse import quote
     url = (f"https://{domain}/rest/api/content/search"
            f"?cql={quote(cql)}&limit=10")
     data = client.request(url, domain)
@@ -162,7 +162,6 @@ def cmd_add_comment(domain, key, body):
 
 def cmd_jql(domain, query):
     """Search Jira via JQL."""
-    from urllib.parse import quote
     url = (f"https://{domain}/rest/api/2/search"
            f"?jql={quote(query)}&maxResults=20"
            f"&fields=summary,status,assignee,priority")
