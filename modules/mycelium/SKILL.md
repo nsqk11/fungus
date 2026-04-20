@@ -78,18 +78,18 @@ Skip everything that does not match these directions.
 ### toolChain
 
 - Tool combination sequences for a task.
-  Produced by `hypha` from `preToolUse` spores within a turn.
+  Aggregated from individual tool calls within a turn.
 
 ### preToolUse
 
-- Normally absent — aggregated into `toolChain` by `hypha`.
+- Normally absent — aggregated into `toolChain` at stop time.
   Skip if encountered (residual from incomplete aggregation).
 
 ### postToolUse
 
 - Error context: what failed, why, and surrounding conditions.
   Only failure spores reach this stage
-  (`hypha` filters success out).
+  (successes are filtered at capture time).
 
 ### stop
 
