@@ -17,17 +17,37 @@ for cmd in python3.12 jq; do
   }
 done
 
-# Clean previous install, preserve data/
+# Clean previous install, preserve data/ and skills/ (skills handled separately)
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation (preserving data/) ..."
   find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
-    -not -name data -exec rm -rf {} + 2>/dev/null || true
+    -not -name data -not -name skills -exec rm -rf {} + 2>/dev/null || true
 fi
 
-# Copy files
+# Copy files (preserve data/ dirs inside skills)
 mkdir -p "$INSTALL_DIR"
 for dir in hooks modules prompts skills; do
-  [ -d "$REPO_ROOT/$dir" ] && cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
+  [ -d "$REPO_ROOT/$dir" ] || continue
+  if [ "$dir" = "skills" ]; then
+    # Sync each skill individually, preserving its data/
+    for skill in "$REPO_ROOT/$dir"/*/; do
+      skill_name="$(basename "$skill")"
+      dest="$INSTALL_DIR/$dir/$skill_name"
+      mkdir -p "$dest"
+      # Remove non-data contents, then copy
+      find "$dest" -mindepth 1 -maxdepth 1 \
+        -not -name data -exec rm -rf {} + 2>/dev/null || true
+      # Copy non-data contents from repo
+      for item in "$skill"*; do
+        [ "$(basename "$item")" = "data" ] && continue
+        cp -r "$item" "$dest/"
+      done
+      # Ensure data dir exists
+      mkdir -p "$dest/data"
+    done
+  else
+    cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
+  fi
 done
 
 # Ensure data directory

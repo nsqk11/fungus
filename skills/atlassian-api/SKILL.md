@@ -12,49 +12,49 @@ description: "[tool] Unified Atlassian REST API client — Confluence pages, Jir
 - **Does**:
   - Send authenticated REST requests to Confluence and Jira.
   - Manage Bearer tokens per domain.
-  - Fetch Confluence pages with version, author, and updated metadata.
-  - Cache page content as plain text to `data/pages/<pageId>.txt`.
-  - Maintain a page index at `data/page-index.json`.
+  - Fetch Confluence pages with cache-aware update check.
+  - Cache page content as plain text per domain.
+  - Maintain a page index per domain.
   - Search Confluence via CQL and Jira via JQL.
   - Upload Confluence page content with auto version increment.
-  - Convert Confluence Storage HTML to plain text.
+  - Convert Confluence Storage HTML to plain text with image links.
 - **Does not**:
   - Contain business logic — calling skills decide what to fetch and how to use it.
   - Auto-renew expired tokens — user must create new PATs manually.
   - Access non-Atlassian APIs.
+  - Download or cache images.
 
 ## Interface
 
 - **Commands**:
-  - `atlassian.py page` — fetch and cache a Confluence page.
-  - `atlassian.py lookup` — search local page index.
-  - `atlassian.py search` — Confluence CQL search.
-  - `atlassian.py issue` — fetch a Jira issue.
-  - `atlassian.py jql` — Jira JQL search.
-  - `atlassian.py add-comment` — add comment to Jira issue.
-  - `atlassian.py get` — raw GET to any Atlassian URL.
-  - `atlassian.py upload` — update Confluence page content.
-  - `atlassian.py token` — manage tokens (list/set/remove/test).
-- **Input**: CLI arguments. Domains from `ATLASSIAN_CONFLUENCE` and `ATLASSIAN_JIRA` environment variables.
-- **Output**: stdout (text or JSON). Tokens in `data/tokens.json`. Page cache in `data/pages/`. Index at `data/page-index.json`.
+  - `cli.py page` — fetch and cache a Confluence page.
+  - `cli.py lookup` — search local page index.
+  - `cli.py search` — Confluence CQL search.
+  - `cli.py issue` — fetch a Jira issue.
+  - `cli.py jql` — Jira JQL search.
+  - `cli.py add-comment` — add comment to Jira issue.
+  - `cli.py get` — raw GET to any Atlassian URL.
+  - `cli.py upload` — update Confluence page content.
+  - `cli.py token` — manage tokens (list/set/remove/test).
+- **Input**: CLI arguments. First argument is domain or URL for network commands.
+- **Output**: stdout (text or JSON). Tokens in `data/tokens.json`. Page cache in `data/pages/<domain>/`. Index at `data/page-index.json`.
 
 ## Behavior
 
 ### page
 
-Fetch a Confluence page, extract metadata, cache content.
+Fetch a Confluence page with cache-aware update check.
 
 ```bash
-python3 atlassian.py page <pageId>
+python3 cli.py page <domain-or-url> <pageId>
 ```
 
 Process:
-1. GET `/rest/api/content/<pageId>?expand=body.storage,version`.
-2. Extract title, version number, author (`version.by.displayName`), updated time (`version.when`).
-3. Convert Storage HTML to plain text.
-4. Write text to `data/pages/<pageId>.txt`.
-5. Update `data/page-index.json` with `{title, version, author, updated}`.
-6. Print metadata header and text content to stdout.
+1. GET metadata (lightweight, no body).
+2. Compare `updated` time with local index.
+3. Changed → GET full content, convert HTML to text (with image links), update cache and index.
+4. Unchanged → read local cache.
+5. Print metadata header and text content.
 
 Output: metadata header (`title`, `version`, `author`, `updated`) followed by plain text content.
 
@@ -63,10 +63,10 @@ Output: metadata header (`title`, `version`, `author`, `updated`) followed by pl
 Search the local page index by keyword.
 
 ```bash
-python3 atlassian.py lookup <keyword>
+python3 cli.py lookup <keyword> [<domain-or-url>]
 ```
 
-Process: all words in keyword must match the title (case-insensitive).
+Process: all words in keyword must match the title (case-insensitive). Optional domain limits search scope.
 
 Output: `pageId  title` per match, one per line.
 
@@ -75,7 +75,7 @@ Output: `pageId  title` per match, one per line.
 Search Confluence via CQL.
 
 ```bash
-python3 atlassian.py search <query> [--space SPACEKEY]
+python3 cli.py search <domain-or-url> <query> [--space SPACEKEY]
 ```
 
 Process: query Confluence CQL, return up to 10 results, update page index with titles.
@@ -87,7 +87,7 @@ Output: `pageId  title` per result, one per line.
 Fetch a Jira issue.
 
 ```bash
-python3 atlassian.py issue <issueKey>
+python3 cli.py issue <domain-or-url> <issueKey>
 ```
 
 Output: JSON with summary, status, description, assignee, priority, labels.
@@ -97,7 +97,7 @@ Output: JSON with summary, status, description, assignee, priority, labels.
 Search Jira via JQL.
 
 ```bash
-python3 atlassian.py jql <query>
+python3 cli.py jql <domain-or-url> <query>
 ```
 
 Output: up to 20 results as JSON.
@@ -107,7 +107,7 @@ Output: up to 20 results as JSON.
 Add a comment to a Jira issue.
 
 ```bash
-python3 atlassian.py add-comment <issueKey> "<body>"
+python3 cli.py add-comment <domain-or-url> <issueKey> "<body>"
 ```
 
 Output: confirmation message with comment ID.
@@ -117,7 +117,7 @@ Output: confirmation message with comment ID.
 Raw GET request to any Atlassian URL. Domain extracted from URL for token lookup.
 
 ```bash
-python3 atlassian.py get <url>
+python3 cli.py get <url>
 ```
 
 Output: raw response body.
@@ -127,7 +127,7 @@ Output: raw response body.
 Update a Confluence page with Storage format HTML.
 
 ```bash
-python3 atlassian.py upload <pageId> <file.storage.html>
+python3 cli.py upload <domain-or-url> <pageId> <file.storage.html>
 ```
 
 Process: read current version, increment by 1, PUT new content.
@@ -139,10 +139,10 @@ Output: confirmation message with new version number.
 Manage Bearer tokens per domain.
 
 ```bash
-python3 atlassian.py token list
-python3 atlassian.py token set <domain> <pat>
-python3 atlassian.py token remove <domain>
-python3 atlassian.py token test <domain>
+python3 cli.py token list
+python3 cli.py token set <domain> <pat>
+python3 cli.py token remove <domain>
+python3 cli.py token test <domain>
 ```
 
 Output: `list` prints configured domains. `set`/`remove` print confirmation. `test` prints OK, EXPIRED, or FAILED.
