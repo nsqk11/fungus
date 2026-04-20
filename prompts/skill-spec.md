@@ -31,6 +31,39 @@ description: "[type] <Concise one-sentence summary. Include trigger keywords and
 
 Type prefix in description: `[module]`, `[tool]`, or `[guide]`.
 
+### Writing a Good Description
+
+The description is the primary triggering mechanism.
+The agent sees only name + description when deciding
+whether to consult a skill.
+
+**Be pushy.**
+The agent tends to undertrigger — it skips skills
+it should use. Combat this by making the description
+assertive about when to activate.
+
+Bad: "Handle DNS ad blocking configuration."
+Good: "DNS-level ad blocking server — installation,
+  configuration, blocklist management. Use when setting up
+  AdGuard Home, managing DNS blocklists, or debugging
+  DNS filtering. Trigger on mentions of 'AdGuard', 'AGH',
+  'blocklist', or 'Unbound'. Do NOT use for client-side
+  ad blocking or non-DNS filtering."
+
+**Include trigger keywords.**
+List the words a user would naturally say.
+Include abbreviations, aliases, and non-English terms
+if the user speaks multiple languages.
+
+**Include Do NOT exclusions.**
+Name adjacent concerns that belong to other skills.
+This prevents false triggers and helps the agent
+route to the correct skill.
+
+**Keep it under 100 words.**
+The description is always in context.
+Long descriptions waste tokens on every turn.
+
 ````markdown
 # {Name}
 

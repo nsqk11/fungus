@@ -13,9 +13,11 @@ description: "[module] Detect mature patterns in nutrients
 
 - **Does**:
   - Count nutrient entries via `bash memory.sh`.
+  - Output keyword frequency to aid pattern detection.
   - Prompt the agent to review nutrients for patterns.
-  - Guide the agent to upgrade nutrients to `fruiting`
-    or `network` stage.
+  - Guide the agent through skill creation when
+    a pattern is confirmed.
+  - Upgrade nutrients to `fruiting` or `network` stage.
 - **Does not**:
   - Capture raw signals.
   - Digest spores into nutrients.
@@ -58,19 +60,82 @@ bash hooks/memory.sh update --id <id> --field stage --value fruiting
 
 ### On agentSpawn
 
-The script outputs a reminder for the agent.
-The agent performs pattern detection in-session.
-
 1. Count nutrients via `bash memory.sh count --stage nutrient`.
    If zero, skip silently.
-2. Output `<fruit-reminder>` prompting the agent
-   to ask the user about skill emergence review.
+2. Extract keyword frequencies across all nutrients.
+   Output as `<fruit-reminder>` with count and top keywords.
 
 The agent, when confirmed by the user, reads this SKILL.md
-and reviews nutrients using the Storage Commands above.
+and proceeds to Pattern Detection below.
 
-Pattern detection criteria (applied by the agent):
-- Check for recurring keywords across nutrients.
-- Single insight → upgrade to `network`.
-- Recurring pattern → upgrade to `fruiting`,
-  then create a new skill in `skills/` following `skill-spec.md`.
+### Pattern Detection
+
+Review all nutrients. Look for:
+
+- **Recurring keywords** — same keyword in 3+ nutrients
+  signals a pattern worth capturing as a skill.
+- **Single insight** — a standalone fact with no recurring
+  pattern. Upgrade to `network` (permanent memory).
+- **No pattern** — skip silently.
+
+When a pattern is found, confirm with the user
+before proceeding to Skill Creation.
+
+### Skill Creation
+
+Follow this sequence when a pattern matures into a skill.
+
+#### 1. Capture Intent
+
+Clarify with the user:
+- What should this skill enable the agent to do?
+- When should it trigger? (phrases, contexts, file types)
+- What is explicitly out of scope?
+
+Extract answers from the nutrients where possible.
+The user fills gaps and confirms before proceeding.
+
+#### 2. Write the SKILL.md
+
+Follow `skill-spec.md` strictly. Key points:
+
+- **description** must be pushy — include trigger keywords
+  and `Do NOT` exclusions so the skill activates reliably.
+  Err on the side of over-triggering; undertriggering
+  is the more common failure mode.
+- **Boundary** must have clear Does / Does not.
+- **Behavior** must trace back to Boundary items.
+- Explain *why* behind instructions, not just *what*.
+  The agent using this skill is smart — reasoning
+  is more effective than rigid MUSTs.
+
+Place the new skill in `skills/<skill-name>/SKILL.md`.
+
+#### 3. Verify
+
+After writing the skill:
+- Re-read it with fresh eyes. Is it general enough
+  to handle variations, or overfitted to the nutrients
+  that spawned it?
+- Check the description triggers against realistic prompts.
+  Would a user's natural phrasing activate it?
+- Check the Does Not list. Are adjacent concerns excluded?
+
+#### 4. Upgrade Nutrients
+
+- Nutrients that formed the pattern → `fruiting`.
+- Standalone insights discovered during review → `network`.
+
+### Description Quality Checklist
+
+Apply when writing or reviewing any skill description.
+
+- Starts with `[type]` prefix: `[module]`, `[tool]`,
+  or `[guide]`.
+- States what the skill does in one sentence.
+- Includes trigger keywords — the words a user would
+  naturally say when they need this skill.
+- Includes `Do NOT` exclusions — adjacent concerns
+  that belong to other skills.
+- Pushy enough: would the agent pick this skill
+  even if the user does not name it explicitly?
