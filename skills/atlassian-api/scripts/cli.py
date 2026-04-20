@@ -2,21 +2,25 @@
 """Unified Atlassian REST API client.
 
 Usage:
-    cli.py page         <domain-or-url> <pageId>
-    cli.py lookup       <keyword> [<domain-or-url>]
-    cli.py search       <domain-or-url> <query> [--space KEY]
-    cli.py issue        <domain-or-url> <issueKey>
-    cli.py jql          <domain-or-url> <query>
-    cli.py add-comment  <domain-or-url> <issueKey> <body>
-    cli.py get          <url>
-    cli.py upload       <domain-or-url> <pageId> <file>
-    cli.py token        {list|set|remove|test} [args...]
+    cli.py <command> [args...]
+    cli.py --help
+    cli.py <command> --help
+
+Commands:
+    page         Fetch and cache a Confluence page
+    lookup       Search local page index by keyword
+    search       Search Confluence via CQL
+    issue        Fetch a Jira issue
+    jql          Search Jira via JQL
+    add-comment  Add comment to a Jira issue
+    get          Raw GET to any Atlassian URL
+    upload       Update a Confluence page
+    token        Manage Bearer tokens per domain
 """
 import json
 import os
 import sys
 
-# Ensure scripts/ is on path for sibling imports.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cache
@@ -27,11 +31,54 @@ from urllib.error import HTTPError
 from urllib.request import Request
 from urllib.request import urlopen
 
+HELP = {
+    "page": "Fetch and cache a Confluence page.\n\n"
+            "Usage: cli.py page <domain-or-url> <pageId>\n\n"
+            "Checks remote updated time against local cache.\n"
+            "Only fetches full content when page has changed.",
+    "lookup": "Search local page index by keyword.\n\n"
+              "Usage: cli.py lookup <keyword> [<domain-or-url>]\n\n"
+              "All words must match title (case-insensitive).\n"
+              "Optional domain limits search scope.",
+    "search": "Search Confluence via CQL.\n\n"
+              "Usage: cli.py search <domain-or-url> <query> [--space KEY]\n\n"
+              "Returns up to 10 results. Updates local page index.",
+    "issue": "Fetch a Jira issue.\n\n"
+             "Usage: cli.py issue <domain-or-url> <issueKey>\n\n"
+             "Returns JSON with summary, status, description, assignee, priority, labels.",
+    "jql": "Search Jira via JQL.\n\n"
+           "Usage: cli.py jql <domain-or-url> <query>\n\n"
+           "Returns up to 20 results as JSON.",
+    "add-comment": "Add comment to a Jira issue.\n\n"
+                   "Usage: cli.py add-comment <domain-or-url> <issueKey> <body>",
+    "get": "Raw GET to any Atlassian URL.\n\n"
+           "Usage: cli.py get <url>\n\n"
+           "Domain extracted from URL for token lookup.",
+    "upload": "Update a Confluence page with Storage format HTML.\n\n"
+              "Usage: cli.py upload <domain-or-url> <pageId> <file>\n\n"
+              "Reads current version, increments by 1, PUTs new content.",
+    "token": "Manage Bearer tokens per domain.\n\n"
+             "Usage:\n"
+             "    cli.py token list\n"
+             "    cli.py token set <domain> <pat>\n"
+             "    cli.py token remove <domain>\n"
+             "    cli.py token test <domain>",
+}
+
 
 def die(msg):
     """Print error and exit."""
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
+
+
+def show_help(command=None):
+    """Print help and exit."""
+    if command and command in HELP:
+        print(HELP[command])
+    else:
+        print(__doc__.strip())
+    sys.exit(0)
 
 
 def extract_domain(s):
@@ -190,7 +237,7 @@ def cmd_token(args):
         die("Usage: token {list|set|remove|test} [args]")
 
 
-# --- CLI parsing ---
+# --- CLI ---
 
 def parse_option(args, name):
     """Extract --name value from args, return (value, remaining)."""
@@ -203,45 +250,49 @@ def parse_option(args, name):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        die("Usage: cli.py <command> [args...]")
+    if len(sys.argv) < 2 or sys.argv[1] == "--help":
+        show_help()
 
     cmd = sys.argv[1]
     rest = sys.argv[2:]
+
+    if "--help" in rest:
+        show_help(cmd)
+
     space_opt, rest = parse_option(rest, "--space")
 
     if cmd == "page":
         if len(rest) < 2:
-            die("Usage: page <domain-or-url> <pageId>")
+            show_help("page")
         cmd_page(extract_domain(rest[0]), rest[1])
     elif cmd == "lookup":
         if not rest:
-            die("Usage: lookup <keyword> [<domain-or-url>]")
+            show_help("lookup")
         domain = extract_domain(rest[1]) if len(rest) > 1 else None
         cmd_lookup(rest[0], domain)
     elif cmd == "search":
         if len(rest) < 2:
-            die("Usage: search <domain-or-url> <query> [--space KEY]")
+            show_help("search")
         cmd_search(extract_domain(rest[0]), rest[1], space_opt)
     elif cmd == "issue":
         if len(rest) < 2:
-            die("Usage: issue <domain-or-url> <issueKey>")
+            show_help("issue")
         cmd_issue(extract_domain(rest[0]), rest[1])
     elif cmd == "jql":
         if len(rest) < 2:
-            die("Usage: jql <domain-or-url> <query>")
+            show_help("jql")
         cmd_jql(extract_domain(rest[0]), rest[1])
     elif cmd == "add-comment":
         if len(rest) < 3:
-            die("Usage: add-comment <domain-or-url> <issueKey> <body>")
+            show_help("add-comment")
         cmd_add_comment(extract_domain(rest[0]), rest[1], rest[2])
     elif cmd == "get":
         if not rest:
-            die("Usage: get <url>")
+            show_help("get")
         cmd_get(rest[0])
     elif cmd == "upload":
         if len(rest) < 3:
-            die("Usage: upload <domain-or-url> <pageId> <file>")
+            show_help("upload")
         cmd_upload(extract_domain(rest[0]), rest[1], rest[2])
     elif cmd == "token":
         cmd_token(rest)
