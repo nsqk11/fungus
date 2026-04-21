@@ -11,6 +11,7 @@ _EXTRACTORS = {
     ".pptx": "scrape_pptx",
     ".docx": "scrape_docx",
     ".xlsx": "scrape_xlsx",
+    ".pdf": "scrape_pdf",
 }
 
 

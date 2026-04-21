@@ -17,7 +17,7 @@ description: "[tool] Scrape and patch Office documents (docx, pptx,
   - Scrape docx body into flat JSON keyed by body element index.
   - Scrape pptx slides into flat JSON keyed by slide index.
   - Scrape xlsx sheets into flat JSON keyed by sheet name (planned).
-  - Scrape PDF text into flat JSON keyed by page index (planned).
+  - Scrape PDF pages into flat JSON keyed by page index (block-level with table detection).
   - Patch docx XML in-place via JSON instructions.
   - Patch pptx XML in-place via JSON instructions (planned).
   - Preserve everything not explicitly targeted during patch.
