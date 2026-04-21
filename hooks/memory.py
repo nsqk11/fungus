@@ -279,6 +279,7 @@ def cmd_clean(args: list[str]) -> None:
             " (SELECT id FROM memory WHERE stage = 'network'"
             "  ORDER BY timestamp DESC LIMIT 50)"
         )
+    _connect().execute("VACUUM")
     print("OK: clean")
 
 
