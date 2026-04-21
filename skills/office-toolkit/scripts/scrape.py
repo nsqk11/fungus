@@ -20,7 +20,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scrape Office documents into flat JSON.",
     )
-    parser.add_argument("input", help="Input file (.docx, .pptx)")
+    parser.add_argument("input", help="Input file (.docx, .pptx, .xlsx, .pdf)")
     parser.add_argument(
         "-o", "--output", help="Output .json (default: stdout)",
     )
