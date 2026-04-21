@@ -55,7 +55,7 @@ cd fungus
 bash install.sh
 ```
 
-> **Prerequisites:** [Kiro CLI](https://github.com/kirolabs/kiro) · Python 3.12+ · Bash ≥ 4.0 · `jq` ≥ 1.6
+> **Prerequisites:** [Kiro CLI](https://github.com/kirolabs/kiro) · Python 3.12+ · Bash ≥ 4.0
 
 ## 🔬 How It Works
 
