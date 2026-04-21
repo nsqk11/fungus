@@ -160,7 +160,7 @@ def cmd_add(args: list[str]) -> None:
         entry_id = _next_id(conn)
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         conn.execute(
-            "INSERT INTO memory"
+            "INSERT OR IGNORE INTO memory"
             f"({', '.join(_FIELD_COLUMNS)})"
             f" VALUES({', '.join('?' for _ in _FIELD_COLUMNS)})",
             (entry_id, ts, stage, hook, data, "", "[]", "[]", ""),
