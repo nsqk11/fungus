@@ -40,5 +40,4 @@ Run `python3 cli.py --help` for command usage.
 - **Domain resolution**: first argument is domain or full URL; domain extracted automatically.
 - **page caching**: lightweight metadata check first; full fetch only when content changed.
 - **Image conversion**: attachment images converted to full `download/attachments/` URLs, not cached.
-- **Cache structure**: `data/pages/<domain>/<pageId>.txt`, index at `data/page-index.json` keyed by domain.
-- **Token storage**: `data/tokens.json`, file permissions 600.
+- **Storage**: single SQLite database at `data/store.db`, file permissions 600. Tables: `tokens` (domain → PAT) and `cache` (domain + page_id → metadata + content).
