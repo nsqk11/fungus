@@ -90,11 +90,11 @@ To fulfill the Boundary above, what hooks and data partitions
 are needed?
 Declare only what is necessary.
 Must match script annotations (@hook, @writes).
-Prefer `bash memory.sh` over direct file references.
+Prefer `python3.12 memory.py` over direct file references.
 
 - **Hooks**: registered hook names.
-- **Reads**: memory.json partitions read. (none) if none.
-- **Writes**: memory.json partitions written. (none) if none.
+- **Reads**: memory.db partitions read. (none) if none.
+- **Writes**: memory.db partitions written. (none) if none.
 </description>
 </variant>
 
@@ -124,7 +124,7 @@ When does this guide activate, and what does it relate to?
 <description>
 One subsection per hook declared in Interface.
 Describe what the module does at each hook.
-Include concrete `bash memory.sh` commands where applicable.
+Include concrete `python3.12 memory.py` commands where applicable.
 If the module does not inspect stdin structure, omit Input.
 
 Every behavior must trace back to a Does item in Boundary.

@@ -23,42 +23,42 @@ description: "[module] Digest raw spores into structured
 ## Interface
 
 - **Hooks**: `agentSpawn`
-- **Reads**: `spore` and `network` stages via `bash memory.sh`
+- **Reads**: `spore` and `network` stages via `python3.12 memory.py`
 - **Writes**: updates `spore` → `nutrient` or `skipped`
-  via `bash memory.sh`
+  via `python3.12 memory.py`
 
 ## Storage Commands
 
 List network memory:
 
 ```bash
-bash hooks/memory.sh list --stage network
+python3.12 hooks/memory.py list --stage network
 ```
 
 List undigested spores:
 
 ```bash
-bash hooks/memory.sh list --stage spore
+python3.12 hooks/memory.py list --stage spore
 ```
 
 Get full spore detail:
 
 ```bash
-bash hooks/memory.sh get <id>
+python3.12 hooks/memory.py get <id>
 ```
 
 Upgrade spore to nutrient:
 
 ```bash
-bash hooks/memory.sh update --id <id> --field stage --value nutrient
-bash hooks/memory.sh update --id <id> --field summary --value "<summary>"
-bash hooks/memory.sh update --id <id> --field keywords --value '["kw1","kw2"]'
+python3.12 hooks/memory.py update --id <id> --field stage --value nutrient
+python3.12 hooks/memory.py update --id <id> --field summary --value "<summary>"
+python3.12 hooks/memory.py update --id <id> --field keywords --value '["kw1","kw2"]'
 ```
 
 Skip valueless spore:
 
 ```bash
-bash hooks/memory.sh update --id <id> --field stage --value skipped
+python3.12 hooks/memory.py update --id <id> --field stage --value skipped
 ```
 
 ## Digest Direction
@@ -103,9 +103,9 @@ Skip everything that does not match these directions.
 The script outputs context for the agent.
 The agent performs the actual digest in-session.
 
-1. Query network summaries via `bash memory.sh`.
+1. Query network summaries via `python3.12 memory.py`.
    Output as `<memory>` block.
-2. Count spores via `bash memory.sh count --stage spore`.
+2. Count spores via `python3.12 memory.py count --stage spore`.
    If zero, skip silently.
 3. Output `<mycelium-reminder>` prompting the agent
    to ask the user about digestion.

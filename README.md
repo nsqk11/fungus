@@ -79,7 +79,7 @@ Hyphae don't capture blindly — structural filters discard noise at the source:
 | Hook | What Passes | What Gets Dropped |
 |------|-------------|-------------------|
 | `userPromptSubmit` | Prompts > 5 chars | Trivial acks ("ok", "嗯") |
-| `preToolUse` | Non-self-referential, non-read/write calls | `memory.sh` calls; `fs_read`, `fs_write`, `grep`, `glob`, `code`, `todo_list` |
+| `preToolUse` | Non-self-referential, non-read/write calls | `memory.py` calls; `fs_read`, `fs_write`, `grep`, `glob`, `code`, `todo_list` |
 | `postToolUse` | Tool failures only | Successful tool results |
 | `stop` | All assistant responses | Nothing |
 
@@ -101,8 +101,8 @@ Hypha    Mycelium    Fruit     substrate
 writes   writes      writes    cleans
 ```
 
-Each module writes to its own partition in `memory.json`.
-Memory is shared — a single `data/memory.json` serves all agents.
+Each module writes to its own partition in `memory.db`.
+Memory is shared — a single `data/memory.db` serves all agents.
 Substrate runs `clean` on `agentSpawn` before any module —
 removing `skipped` and consumed `fruiting` entries.
 Boundaries are declared in each script's annotations —
@@ -134,11 +134,11 @@ Skills are the mushrooms — visible outputs of the underground network.
 fungus/
 ├── assets/                      Images
 ├── data/
-│   └── memory.json              Shared memory (gitignored)
+│   └── memory.db              Shared memory (gitignored)
 ├── hooks/
 │   ├── substrate.sh             Signal conductor — reads hook from stdin, routes to modules
 │   ├── substrate.py             Scan annotations, match hook, sort by priority
-│   ├── memory.sh                CRUD operations for memory.json
+│   ├── memory.py                CRUD operations for memory.db
 │   └── README.md                Hook payload reference
 ├── modules/
 │   ├── hypha/                   Sense — explore and detect signals

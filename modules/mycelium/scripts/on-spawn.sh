@@ -6,11 +6,11 @@
 # @description Remind about undigested spores
 set -euo pipefail
 
-MEMORY="$FUNGUS_HOME/hooks/memory.sh"
+MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
 
 # Load network memory with summaries
-summaries=$(bash "$MEMORY" query --jq \
-  '[.[] | select(.stage == "network") | .summary | select(. != "")] | .[]')
+summaries=$($MEMORY query --sql \
+  "SELECT summary FROM memory WHERE stage='network' AND summary != ''")
 if [ -n "$summaries" ]; then
   echo "<memory>"
   while IFS= read -r line; do
@@ -20,7 +20,7 @@ if [ -n "$summaries" ]; then
 fi
 
 # Check for undigested spores
-count=$(bash "$MEMORY" count --stage spore)
+count=$($MEMORY count --stage spore)
 [ "$count" = "0" ] && exit 0
 
 echo "<mycelium-reminder>"

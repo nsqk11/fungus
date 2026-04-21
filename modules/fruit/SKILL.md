@@ -12,7 +12,7 @@ description: "[module] Detect mature patterns in nutrients
 ## Boundary
 
 - **Does**:
-  - Count nutrient entries via `bash memory.sh`.
+  - Count nutrient entries via `python3.12 memory.py`.
   - Output keyword frequency to aid pattern detection.
   - Prompt the agent to review nutrients for patterns.
   - Guide the agent through skill creation when
@@ -25,42 +25,42 @@ description: "[module] Detect mature patterns in nutrients
 ## Interface
 
 - **Hooks**: `agentSpawn`
-- **Reads**: `nutrient` stage via `bash memory.sh`
+- **Reads**: `nutrient` stage via `python3.12 memory.py`
 - **Writes**: updates `nutrient` → `fruiting` or `network`
-  via `bash memory.sh`
+  via `python3.12 memory.py`
 
 ## Storage Commands
 
 List nutrients:
 
 ```bash
-bash hooks/memory.sh list --stage nutrient
+python3.12 hooks/memory.py list --stage nutrient
 ```
 
 Get nutrient detail:
 
 ```bash
-bash hooks/memory.sh get <id>
+python3.12 hooks/memory.py get <id>
 ```
 
 Upgrade nutrient to network (permanent memory):
 
 ```bash
-bash hooks/memory.sh update --id <id> --field stage --value network
-bash hooks/memory.sh update --id <id> --field category --value "<category>"
+python3.12 hooks/memory.py update --id <id> --field stage --value network
+python3.12 hooks/memory.py update --id <id> --field category --value "<category>"
 ```
 
 Upgrade nutrient to fruiting (skill candidate):
 
 ```bash
-bash hooks/memory.sh update --id <id> --field stage --value fruiting
+python3.12 hooks/memory.py update --id <id> --field stage --value fruiting
 ```
 
 ## Behavior
 
 ### On agentSpawn
 
-1. Count nutrients via `bash memory.sh count --stage nutrient`.
+1. Count nutrients via `python3.12 memory.py count --stage nutrient`.
    If zero, skip silently.
 2. Extract keyword frequencies across all nutrients.
    Output as `<fruit-reminder>` with count and top keywords.

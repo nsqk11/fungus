@@ -23,7 +23,7 @@ Writing standards for all documentation and prompts in this repository.
 - Max 80 characters per line in Markdown source.
 - Use ATX headers (`#`), not Setext (underlines).
 - Use `-` for unordered lists, `1.` for ordered lists.
-- Use backticks for code references: `mycelium`, `memory.json`.
+- Use backticks for code references: `mycelium`, `memory.db`.
 - Use `**bold**` for key terms on first mention only.
 
 ## Structure

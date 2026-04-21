@@ -64,4 +64,4 @@ Each hook receives a JSON payload via stdin from Kiro CLI.
 |--------|------|
 | `substrate.sh` | Thin shell — routes hooks to module scripts |
 | `substrate.py` | Core — scan annotations, match hook, sort by priority |
-| `memory.sh` | CRUD operations for `memory.json` |
+| `memory.py` | CRUD operations for `memory.db` |

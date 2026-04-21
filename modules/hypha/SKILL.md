@@ -14,7 +14,7 @@ description: "[module] Capture hook payloads as spores
 - **Does**:
   - Read stdin from every registered hook.
   - Apply structural filters per hook type.
-  - Store passing payloads as spores via `bash memory.sh`.
+  - Store passing payloads as spores via `python3.12 memory.py`.
   - Aggregate tool sequences into `toolChain` spores at stop time.
   - Delete aggregated `preToolUse` spores after aggregation.
 - **Does not**:
@@ -24,9 +24,9 @@ description: "[module] Capture hook payloads as spores
 ## Interface
 
 - **Hooks**: `userPromptSubmit`, `preToolUse`, `postToolUse`, `stop`
-- **Reads**: `spore` stage via `bash memory.sh`
+- **Reads**: `spore` stage via `python3.12 memory.py`
   (on `stop`, to find turn boundary and aggregate tool chain)
-- **Writes**: `spore` stage via `bash memory.sh`
+- **Writes**: `spore` stage via `python3.12 memory.py`
 
 ## Filters
 
@@ -36,8 +36,8 @@ Content-level value judgment remains in the digest stage.
 | Hook | Rule | Rationale |
 |------|------|-----------|
 | `userPromptSubmit` | Drop if `prompt` ≤ 5 chars | Trivial acks |
-| `preToolUse` | Skip if `memory.sh`; skip if tool is `fs_read`, `fs_write`, `grep`, `glob`, `code`, or `todo_list` | Self-referential; pure read/write and internal management |
-| `postToolUse` | Skip if `memory.sh`; drop if not failure | Errors only |
+| `preToolUse` | Skip if `memory.py`; skip if tool is `fs_read`, `fs_write`, `grep`, `glob`, `code`, or `todo_list` | Self-referential; pure read/write and internal management |
+| `postToolUse` | Skip if `memory.py`; drop if not failure | Errors only |
 | `stop` | No filter | AI analysis summaries |
 
 ## Behavior
@@ -49,14 +49,14 @@ Store as spore.
 
 ### On preToolUse
 
-Skip if payload contains `memory.sh`.
+Skip if payload contains `memory.py`.
 Skip if tool is `fs_read`, `fs_write`, `grep`, `glob`,
 `code`, or `todo_list`.
 Store as spore.
 
 ### On postToolUse
 
-Skip if payload contains `memory.sh`.
+Skip if payload contains `memory.py`.
 Drop if `tool_response.success` is not `false`.
 Store as spore.
 

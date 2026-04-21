@@ -1,6 +1,6 @@
 # Memory Schema
 
-Data structure for `memory.json` — the shared data store.
+Data structure for `memory.db` — the shared data store.
 
 ## Format
 
@@ -58,4 +58,4 @@ and caps `network` at the newest entries when over limit.
 
 ## File Location
 
-`data/memory.json` — single shared store, gitignored.
+`data/memory.db` — single shared store, gitignored.

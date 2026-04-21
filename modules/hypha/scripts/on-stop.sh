@@ -10,35 +10,32 @@ set -euo pipefail
 STDIN=$(cat)
 [ -z "$STDIN" ] && exit 0
 
-MEMORY="$FUNGUS_HOME/hooks/memory.sh"
+MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
 
 # Store stop spore
-bash "$MEMORY" add --stage spore --hook stop --data "$STDIN"
+$MEMORY add --stage spore --hook stop --data "$STDIN"
 
-# Extract tool chain for this turn
-# Use last userPromptSubmit spore ID as boundary (IDs are monotonic)
-CHAIN=$(bash "$MEMORY" query --jq '
-  ([.[] | select(.hook == "userPromptSubmit")] | last | .id) as $bid |
-  if $bid then
-    [.[] | select(.hook == "preToolUse" and .id > $bid)
-      | .data.tool_name
-      | select(. != "fs_read" and . != "fs_write" and . != "grep" and . != "glob" and . != "code" and . != "todo_list")] |
-    if length > 0 then join(",") else empty end
-  else empty end
-')
+# Find boundary: last userPromptSubmit id
+BOUNDARY=$($MEMORY query --sql \
+  "SELECT id FROM memory WHERE hook='userPromptSubmit' ORDER BY id DESC LIMIT 1")
+[ -z "$BOUNDARY" ] && exit 0
 
+# Collect tool names from preToolUse spores after boundary
+CHAIN=$($MEMORY query --sql \
+  "SELECT json_extract(data, '\$.tool_name') FROM memory
+   WHERE hook='preToolUse' AND id > '$BOUNDARY'
+     AND json_extract(data, '\$.tool_name') NOT IN
+         ('fs_read','fs_write','grep','glob','code','todo_list')")
 [ -z "$CHAIN" ] && exit 0
 
-# Delete individual preToolUse spores that were aggregated
-mapfile -t pids < <(bash "$MEMORY" query --jq '
-  ([.[] | select(.hook == "userPromptSubmit")] | last | .id) as $bid |
-  [.[] | select(.hook == "preToolUse" and .id > $bid) | .id] | .[]
-')
-for pid in "${pids[@]}"; do
-  bash "$MEMORY" delete "$pid" >/dev/null 2>&1
-done
+# Aggregate into comma-separated string
+TOOLS=$(echo "$CHAIN" | paste -sd,)
 
-bash "$MEMORY" add \
+# Delete aggregated preToolUse spores
+$MEMORY query --sql \
+  "DELETE FROM memory WHERE hook='preToolUse' AND id > '$BOUNDARY'" >/dev/null
+
+$MEMORY add \
   --stage spore \
   --hook toolChain \
-  --data "{\"tools\":\"$CHAIN\"}"
+  --data "{\"tools\":\"$TOOLS\"}"

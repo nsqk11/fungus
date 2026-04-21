@@ -6,19 +6,25 @@
 # @description Remind about mature nutrient patterns
 set -euo pipefail
 
-MEMORY="$FUNGUS_HOME/hooks/memory.sh"
+MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
 
 # Check for nutrients
-count=$(bash "$MEMORY" count --stage nutrient)
+count=$($MEMORY count --stage nutrient)
 [ "$count" = "0" ] && exit 0
 
 # Extract keyword frequencies across all nutrients
-keywords=$(bash "$MEMORY" query --jq '
-  [.[] | select(.stage == "nutrient") | .keywords[]?] |
-  group_by(.) | map({key: .[0], count: length}) |
-  sort_by(-.count) | .[0:10] |
-  map("\(.count)x \(.key)") | join(", ")
-')
+keywords=$($MEMORY query --sql \
+  "SELECT keywords FROM memory WHERE stage='nutrient' AND keywords != '[]'" \
+  | python3.12 -c "
+import sys, json
+from collections import Counter
+counts = Counter()
+for line in sys.stdin:
+    for kw in json.loads(line.strip()):
+        counts[kw] += 1
+top = counts.most_common(10)
+print(', '.join(f'{c}x {k}' for k, c in top))
+")
 
 echo "<fruit-reminder>"
 echo "$count nutrients accumulated."

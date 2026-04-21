@@ -10,7 +10,7 @@ AGENT_FILE="$KIRO_HOME/agents/fungus.json"
 echo "Installing Fungus to $INSTALL_DIR ..."
 
 # Check prerequisites
-for cmd in python3.12 jq; do
+for cmd in python3.12; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "Error: $cmd is required but not found." >&2
     exit 1
@@ -52,8 +52,6 @@ done
 
 # Ensure data directory
 mkdir -p "$INSTALL_DIR/data"
-[ -f "$INSTALL_DIR/data/memory.json" ] \
-  || echo '[]' > "$INSTALL_DIR/data/memory.json"
 
 # Create agent config (overwrite)
 mkdir -p "$KIRO_HOME/agents"
