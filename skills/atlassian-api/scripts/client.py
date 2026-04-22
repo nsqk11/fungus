@@ -39,8 +39,8 @@ def _send(url, headers, method="GET", body=None, raw=False):
 
     global _last_req
     gap = time.monotonic() - _last_req
-    if gap < 0.3:
-        time.sleep(0.3 - gap)
+    if gap < 0.5:
+        time.sleep(0.5 - gap)
 
     for attempt in range(4):
         _last_req = time.monotonic()
