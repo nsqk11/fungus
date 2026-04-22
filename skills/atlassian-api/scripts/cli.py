@@ -7,18 +7,21 @@ Usage:
     cli.py <command> --help
 
 Commands:
-    page         Fetch and cache a Confluence page
-    lookup       Search local page index by keyword
-    search       Search Confluence via CQL
-    issue        Fetch a Jira issue
-    jql          Search Jira via JQL
-    add-comment  Add comment to a Jira issue
-    get          Raw GET to any Atlassian URL
-    upload       Update a Confluence page
-    token        Manage Bearer tokens per domain
+    page          Fetch and cache a Confluence page
+    lookup        Search local page index by keyword
+    search        Search Confluence via CQL
+    issue         Fetch a Jira issue
+    jql           Search Jira via JQL
+    add-comment   Add comment to a Jira issue
+    get           Raw GET to any Atlassian URL
+    upload        Update a Confluence page
+    analytics     Page view analytics (who viewed)
+    get-comments  Fetch page comments
+    token         Manage Bearer tokens per domain
 """
 import json
 import os
+import re
 import sqlite3
 import stat
 import sys
@@ -70,6 +73,16 @@ HELP = {
              "    cli.py token set <domain> <pat>\n"
              "    cli.py token remove <domain>\n"
              "    cli.py token test <domain>",
+    "analytics": "Page view analytics (who viewed).\n\n"
+                 "Usage: cli.py analytics <domain-or-url> <pageId>"
+                 " [pageId2 ...]\n\n"
+                 "Shows viewers per page excluding yourself.\n"
+                 "Requires confanalytics plugin (session cookie auth).",
+    "get-comments": "Fetch page comments.\n\n"
+                    "Usage: cli.py get-comments <domain-or-url> <pageId>"
+                    " [--inline]\n\n"
+                    "Shows regular comments. Add --inline for inline"
+                    " comments too.",
 }
 
 
@@ -334,6 +347,83 @@ def cmd_upload(domain, page_id, file_path):
     print(f"OK — {title} updated to version {result['version']['number']}")
 
 
+# --- Analytics commands ---
+
+_ANALYTICS_BASE = "/rest/confanalytics/1.0"
+
+
+def _resolve_user_names(domain, user_ids):
+    """Resolve user IDs to display names via confanalytics API."""
+    if not user_ids:
+        return {}
+    url = f"https://{domain}{_ANALYTICS_BASE}/rest/getUserDetails"
+    data = client.request(url, domain, method="POST", data={
+        "accountIds": list(user_ids),
+        "ignoreIncreasedPrivacyMode": False,
+    })
+    return {u["userId"]: u["displayName"] for u in data.get("users", [])}
+
+
+def cmd_analytics(domain, page_ids):
+    """Show page viewers from confanalytics plugin."""
+    # Get current user ID to exclude self from results.
+    me = client.request(
+        f"https://{domain}/rest/api/user/current", domain,
+    ).get("userKey", "")
+
+    all_user_ids = set()
+    page_viewers = {}
+    for pid in page_ids:
+        url = (
+            f"https://{domain}{_ANALYTICS_BASE}"
+            f"/content/viewsByUser?contentId={pid}&contentType=page"
+        )
+        data = client.request(url, domain)
+        viewers = [
+            v for v in data.get("viewsByUser", [])
+            if v["userId"] != me
+        ]
+        page_viewers[pid] = viewers
+        all_user_ids.update(v["userId"] for v in viewers)
+
+    names = _resolve_user_names(domain, all_user_ids)
+    for pid in page_ids:
+        if not page_viewers[pid]:
+            print(f"{pid}\t(no viewers)")
+            continue
+        for v in page_viewers[pid]:
+            print(
+                f"{pid}\t{names.get(v['userId'], v['userId'])}"
+                f"\t{v['views']}\t{v['lastViewedAt']}"
+                f"\tv{v['lastVersionViewed']}"
+            )
+
+
+# --- Comment commands ---
+
+def cmd_get_comments(domain, page_id, inline=False):
+    """Fetch regular and optionally inline comments for a page."""
+    expand = "body.storage,version"
+    if inline:
+        expand += ",extensions.inlineProperties"
+    url = (
+        f"https://{domain}/rest/api/content/{page_id}/child/comment"
+        f"?expand={expand}&depth=all&limit=100"
+    )
+    results = client.request(url, domain).get("results", [])
+    for c in results:
+        location = c.get("extensions", {}).get("location", "footer")
+        kind = "inline" if location == "inline" else "comment"
+        version = c.get("version", {})
+        author = version.get("by", {}).get("displayName", "?")
+        when = version.get("when", "?")[:16]
+        body_html = c.get("body", {}).get("storage", {}).get("value", "")
+        text = re.sub(r"<[^>]+>", "", body_html).strip()[:200]
+        print(f"{kind}\t{author}\t{when}\t{text}")
+    if not results:
+        print("(no comments)")
+
+
 # --- CLI ---
 
 def parse_option(args, name):
@@ -393,5 +483,15 @@ if __name__ == "__main__":
         cmd_upload(extract_domain(rest[0]), rest[1], rest[2])
     elif cmd == "token":
         cmd_token(rest)
+    elif cmd == "analytics":
+        if len(rest) < 2:
+            show_help("analytics")
+        cmd_analytics(extract_domain(rest[0]), rest[1:])
+    elif cmd == "get-comments":
+        if len(rest) < 2:
+            show_help("get-comments")
+        inline = "--inline" in rest
+        args = [a for a in rest if a != "--inline"]
+        cmd_get_comments(extract_domain(args[0]), args[1], inline)
     else:
         die(f"Unknown command: {cmd}")
