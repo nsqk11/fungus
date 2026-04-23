@@ -7,7 +7,7 @@ description: "[guide] Extract behavior principles from external
   or work prompts. Trigger on 'prompt 改进', '行为原则',
   'agent behavior', 'agent-prompt.md', or 'work prompt'.
   Do NOT use for writing Fungus module SKILL.md
-  (that is skill-spec) or general prompt engineering
+  or general prompt engineering
   tutorials."
 ---
 
@@ -24,7 +24,7 @@ description: "[guide] Extract behavior principles from external
   - Distill principles into concise, rhetoric-free rules.
   - Write principles into target prompt files.
 - **Does not**:
-  - Write Fungus module SKILL.md — `skill-spec` handles that.
+  - Write Fungus module SKILL.md.
   - Teach general prompt engineering theory.
   - Modify Kiro system prompt or built-in behavior.
 
@@ -33,8 +33,7 @@ description: "[guide] Extract behavior principles from external
 - **Triggers**: user shares an external project to evaluate,
   asks to improve agent prompt behavior, mentions agent-prompt.md
   or work prompt refinement.
-- **Related**: `skill-spec` for Fungus skill authoring,
-  `fruit` for skill emergence from nutrients.
+- **Related**: `fruit` for skill emergence from nutrients.
 
 ## Behavior
 
@@ -53,7 +52,7 @@ description: "[guide] Extract behavior principles from external
    - Present the classification with reasoning.
      Let the user decide what to adopt.
 3. **Handoff** — if the source contains Fungus module ideas,
-   hand off to `skill-spec`.
+   hand off to `fruit`.
 
 ### Refine Prompt
 

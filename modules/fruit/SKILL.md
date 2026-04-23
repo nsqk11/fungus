@@ -97,7 +97,7 @@ The user fills gaps and confirms before proceeding.
 
 #### 2. Write the SKILL.md
 
-Follow `skill-spec.md` strictly. Key points:
+Key points:
 
 - **description** must be pushy — include trigger keywords
   and `Do NOT` exclusions so the skill activates reliably.

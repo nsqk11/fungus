@@ -21,7 +21,7 @@ fungus/
 │   ├── mycelium/    Digest — break down into structured knowledge
 │   └── fruit/       Grow — produce new skills from mature patterns
 ├── skills/          Grown skills (mushrooms)
-├── prompts/         Standards: coding-style, writing-style, skill-spec
+├── prompts/         Standards: coding-style, writing-style
 └── data/            Runtime data (memory.db) — gitignored
 ```
 
@@ -48,5 +48,4 @@ Respect partition boundaries:
 
 Follow [coding-style.md](coding-style.md) when writing code.
 Follow [writing-style.md](writing-style.md) when writing docs or prompts.
-Follow [skill-spec.md](skill-spec.md) when writing SKILL.md.
 Do not deviate without explicit user approval.
