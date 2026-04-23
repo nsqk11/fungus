@@ -8,17 +8,6 @@ set -euo pipefail
 
 MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
 
-# Load network memory with summaries
-summaries=$($MEMORY query --sql \
-  "SELECT summary FROM memory WHERE stage='network' AND summary != ''")
-if [ -n "$summaries" ]; then
-  echo "<memory>"
-  while IFS= read -r line; do
-    echo "- $line"
-  done <<< "$summaries"
-  echo "</memory>"
-fi
-
 echo '<memory-reminder>
 Before answering questions, search the fungus-memory knowledge base for relevant past decisions, preferences, and lessons learned.
 </memory-reminder>'
