@@ -17,6 +17,12 @@ for cmd in python3.12; do
   }
 done
 
+# Install Python dependencies
+if ! python3.12 -c "import atlassian" 2>/dev/null; then
+  echo "Installing atlassian-python-api ..."
+  python3.12 -m pip install --user atlassian-python-api
+fi
+
 # Clean previous install, preserve data/ and skills/ (skills handled separately)
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation (preserving data/) ..."
