@@ -20,6 +20,7 @@ case "$TOOL" in fs_read|grep|glob|code|todo_list) exit 0 ;; esac
 if [ "$TOOL" = "fs_write" ]; then
   echo '<knowledge-bases-reminder>
 Before writing code, search the google-styleguide knowledge base for the relevant language style rules. Apply Google Style Guide conventions.
+Before writing SKILL.md files, search the agent-skills-spec knowledge base for the official format specification.
 </knowledge-bases-reminder>'
   exit 0
 fi
