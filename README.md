@@ -55,7 +55,7 @@ cd fungus
 bash install.sh
 ```
 
-> **Prerequisites:** [Kiro CLI](https://github.com/kirolabs/kiro) · Python 3.12+ · Bash ≥ 4.0
+> **Prerequisites:** [Kiro CLI](https://github.com/kirolabs/kiro) · Python 3.12+ · Git · Bash ≥ 4.0
 
 ## 🔬 How It Works
 
@@ -79,7 +79,7 @@ Hyphae don't capture blindly — structural filters discard noise at the source:
 | Hook | What Passes | What Gets Dropped |
 |------|-------------|-------------------|
 | `userPromptSubmit` | Prompts > 5 chars | Trivial acks ("ok", "嗯") |
-| `preToolUse` | Non-self-referential, non-read/write calls | `memory.py` calls; `fs_read`, `fs_write`, `grep`, `glob`, `code`, `todo_list` |
+| `preToolUse` | Non-self-referential, non-read calls; style guide reminder on `fs_write` | `memory.py` calls; `fs_read`, `grep`, `glob`, `code`, `todo_list` |
 | `postToolUse` | Tool failures only | Successful tool results |
 | `stop` | All assistant responses | Nothing |
 
@@ -119,6 +119,19 @@ no central config:
 
 The substrate scans these annotations at runtime
 to route hooks to the correct scripts.
+## 📚 Knowledge Bases
+
+Install clones reference repos into `knowledgeBase/` for agent KB indexing:
+
+| Repo | Content |
+|------|---------|
+| [google/styleguide](https://github.com/google/styleguide) | Coding style rules (Python, Shell, JS, HTML/CSS, etc.) |
+| [design-patterns-for-humans](https://github.com/kamranahmedse/design-patterns-for-humans) | GoF design patterns in plain language |
+
+Hypha reminds the agent to search these KBs:
+- **agentSpawn** — design patterns
+- **preToolUse (fs_write)** — style guide
+
 ## 🍄 Grown Skills
 
 Skills are the mushrooms — visible outputs of the underground network.

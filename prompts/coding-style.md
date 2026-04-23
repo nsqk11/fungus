@@ -5,12 +5,8 @@ Code standards for the Fungus repository.
 ## Style Guide
 
 Apply [Google Style Guide](https://google.github.io/styleguide/)
-for the corresponding language:
-
-- [Python](https://google.github.io/styleguide/pyguide.html)
-- [Shell](https://google.github.io/styleguide/shellguide.html)
-
-When Google Style does not cover a case, choose the more readable option.
+for the corresponding language. Refer to the `google-styleguide` knowledge base
+for specific rules.
 
 ## Design Principles
 

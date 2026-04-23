@@ -10,7 +10,7 @@ AGENT_FILE="$KIRO_HOME/agents/fungus.json"
 echo "Installing Fungus to $INSTALL_DIR ..."
 
 # Check prerequisites
-for cmd in python3.12; do
+for cmd in python3.12 git; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "Error: $cmd is required but not found." >&2
     exit 1
@@ -27,7 +27,7 @@ fi
 if [ -d "$INSTALL_DIR" ]; then
   echo "Updating existing installation (preserving data/) ..."
   find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
-    -not -name data -not -name skills -exec rm -rf {} + 2>/dev/null || true
+    -not -name data -not -name skills -not -name knowledgeBase -exec rm -rf {} + 2>/dev/null || true
 fi
 
 # Copy files (preserve data/ dirs inside skills)
@@ -59,6 +59,24 @@ done
 # Ensure data directory
 mkdir -p "$INSTALL_DIR/data"
 
+# Clone/update knowledge base repos
+KB_DIR="$INSTALL_DIR/knowledgeBase"
+mkdir -p "$KB_DIR"
+declare -A KB_REPOS=(
+  ["styleguide"]="https://github.com/google/styleguide.git"
+  ["design-patterns-for-humans"]="https://github.com/kamranahmedse/design-patterns-for-humans.git"
+)
+for name in "${!KB_REPOS[@]}"; do
+  dest="$KB_DIR/$name"
+  if [ -d "$dest/.git" ]; then
+    echo "Updating $name ..."
+    git -C "$dest" pull --ff-only 2>/dev/null || true
+  else
+    echo "Cloning $name ..."
+    git clone --depth 1 "${KB_REPOS[$name]}" "$dest"
+  fi
+done
+
 # Create agent config (overwrite)
 mkdir -p "$KIRO_HOME/agents"
 cat > "$AGENT_FILE" <<AGENT
@@ -78,7 +96,25 @@ cat > "$AGENT_FILE" <<AGENT
   ],
   "resources": [
     "file://$INSTALL_DIR/prompts/agent-context.md",
-    "skill://$INSTALL_DIR/**/SKILL.md"
+    "skill://$INSTALL_DIR/**/SKILL.md",
+    {
+      "type": "knowledgeBase",
+      "source": "file://$INSTALL_DIR/knowledgeBase/styleguide",
+      "name": "google-styleguide",
+      "indexType": "best",
+      "include": ["**/*.md", "**/*.html", "**/*.xml"],
+      "exclude": [".git/**", ".github/**", "include/**", "assets/**", "_includes/**"],
+      "autoUpdate": true
+    },
+    {
+      "type": "knowledgeBase",
+      "source": "file://$INSTALL_DIR/knowledgeBase/design-patterns-for-humans",
+      "name": "design-patterns",
+      "indexType": "best",
+      "include": ["**/*.md"],
+      "exclude": [".git/**", ".github/**"],
+      "autoUpdate": true
+    }
   ],
   "hooks": {
     "agentSpawn": [
