@@ -1,4 +1,5 @@
-"""Shared helpers for Office XML parsing."""
+#!/usr/bin/env python3.12
+"""Parse shared helpers for Office XML."""
 
 import zipfile
 

@@ -15,6 +15,7 @@ import os
 import sqlite3
 import stat
 import sys
+from typing import NoReturn
 
 from atlassian import Confluence
 
@@ -50,13 +51,13 @@ HELP = {
 }
 
 
-def _die(msg):
+def _die(msg: str) -> NoReturn:
     """Print error to stderr and exit."""
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
-def _db():
+def _connect() -> sqlite3.Connection:
     """Return a SQLite connection with tables ready."""
     os.makedirs(os.path.dirname(_DB), exist_ok=True)
     conn = sqlite3.connect(_DB)
@@ -73,15 +74,15 @@ def _db():
     return conn
 
 
-def _secure_db():
+def _secure_db() -> None:
     """Restrict DB file to owner read/write."""
     if os.path.exists(_DB):
         os.chmod(_DB, stat.S_IRUSR | stat.S_IWUSR)
 
 
-def _get_token(domain):
+def _get_token(domain: str) -> str:
     """Look up PAT for *domain*, or exit."""
-    with _db() as conn:
+    with _connect() as conn:
         row = conn.execute(
             "SELECT pat FROM tokens WHERE domain = ?", (domain,)
         ).fetchone()
@@ -90,24 +91,24 @@ def _get_token(domain):
     return row[0]
 
 
-def _confluence(domain):
+def _confluence(domain: str) -> Confluence:
     """Create a Confluence object with token from SQLite."""
     return Confluence(url=f"https://{domain}", token=_get_token(domain))
 
 
 # --- token ---
 
-def cmd_token(args):
+def cmd_token(args: list[str]) -> None:
     """Manage Bearer tokens per domain."""
     sub = args[0] if args else ""
     if sub == "list":
-        with _db() as conn:
+        with _connect() as conn:
             for row in conn.execute("SELECT domain FROM tokens"):
                 print(row[0])
     elif sub == "set":
         if len(args) < 3:
             _die("Usage: token set <domain> <pat>")
-        with _db() as conn:
+        with _connect() as conn:
             conn.execute(
                 "INSERT INTO tokens(domain, pat) VALUES(?, ?)"
                 " ON CONFLICT(domain) DO UPDATE SET pat = excluded.pat",
@@ -118,7 +119,7 @@ def cmd_token(args):
     elif sub == "remove":
         if len(args) < 2:
             _die("Usage: token remove <domain>")
-        with _db() as conn:
+        with _connect() as conn:
             conn.execute("DELETE FROM tokens WHERE domain = ?", (args[1],))
         print(f"Removed token for {args[1]}")
     elif sub == "test":
@@ -143,7 +144,7 @@ def cmd_token(args):
 
 # --- page ---
 
-def cmd_page(domain, page_id):
+def cmd_page(domain: str, page_id: str) -> None:
     """Fetch page with cache-aware incremental update."""
     c = _confluence(domain)
     meta = c.get_page_by_id(page_id, expand="version")
@@ -153,7 +154,7 @@ def cmd_page(domain, page_id):
     author = ver.get("by", {}).get("displayName", "")
     updated = ver.get("when", "")
 
-    with _db() as conn:
+    with _connect() as conn:
         cached = conn.execute(
             "SELECT updated, content FROM cache"
             " WHERE domain = ? AND page_id = ?",
@@ -166,7 +167,7 @@ def cmd_page(domain, page_id):
         full = c.get_page_by_id(page_id, expand="body.storage,version")
         body_html = full.get("body", {}).get("storage", {}).get("value", "")
         text = convert.html2text(body_html, domain, page_id)
-        with _db() as conn:
+        with _connect() as conn:
             conn.execute(
                 "INSERT INTO cache(domain, page_id, title, version,"
                 " author, updated, content) VALUES(?, ?, ?, ?, ?, ?, ?)"
@@ -187,10 +188,10 @@ def cmd_page(domain, page_id):
 
 # --- lookup ---
 
-def cmd_lookup(keyword, domain=None):
+def cmd_lookup(keyword: str, domain: str | None = None) -> None:
     """Search local page cache by keyword."""
     words = keyword.lower().split()
-    with _db() as conn:
+    with _connect() as conn:
         if domain:
             rows = conn.execute(
                 "SELECT page_id, title FROM cache WHERE domain = ?",
@@ -205,7 +206,7 @@ def cmd_lookup(keyword, domain=None):
 
 # --- CLI ---
 
-def _extract_domain(s):
+def _extract_domain(s: str) -> str:
     """Extract domain from URL or bare domain string."""
     if s.startswith("http://") or s.startswith("https://"):
         return s.split("/")[2]

@@ -6,14 +6,16 @@
 # @description Remind about mature nutrient patterns
 set -euo pipefail
 
-MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
+memory() {
+  python3.12 "$FUNGUS_HOME/hooks/memory.py" "$@"
+}
 
 # Check for nutrients
-count=$($MEMORY count --stage nutrient)
+count=$(memory count --stage nutrient)
 [ "$count" = "0" ] && exit 0
 
 # Extract keyword frequencies across all nutrients
-keywords=$($MEMORY query --sql \
+keywords=$(memory query --sql \
   "SELECT keywords FROM memory WHERE stage='nutrient' AND keywords != '[]'" \
   | python3.12 -c "
 import sys, json

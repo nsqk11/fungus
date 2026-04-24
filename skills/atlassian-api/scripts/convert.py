@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.12
 """Convert Confluence Storage HTML to plain text."""
 import html
 import re
