@@ -12,7 +12,7 @@ Writing standards for all documentation and prompts in this repository.
 | Type | Examples | Voice |
 |------|----------|-------|
 | Identity / context | agent-context.md (role section) | Descriptive: "You are...", "This project uses..." |
-| Rules / constraints | coding-style.md, agent-context.md (rules) | Imperative: "Follow...", "Never...", "Always..." |
+| Rules / constraints | coding-standards.md, agent-context.md (rules) | Imperative: "Follow...", "Never...", "Always..." |
 | Templates / guides | `<description>` tags | Descriptive: "This section covers...", "Given the role above..." |
 | SKILL.md body | Module and skill definitions | Imperative: "Sense signals", not "This module senses signals" |
 | Code comments | Inline and docstrings | Descriptive for *what*, imperative for *instructions* |
