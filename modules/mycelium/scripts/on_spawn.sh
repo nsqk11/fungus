@@ -6,10 +6,12 @@
 # @description Remind about undigested spores
 set -euo pipefail
 
-MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
+memory() {
+  python3.12 "$FUNGUS_HOME/hooks/memory.py" "$@"
+}
 
 # Check for undigested spores
-count=$($MEMORY count --stage spore)
+count=$(memory count --stage spore)
 [ "$count" = "0" ] && exit 0
 
 echo "<mycelium-reminder>"

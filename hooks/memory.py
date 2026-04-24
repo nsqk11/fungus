@@ -14,6 +14,7 @@ import sqlite3
 import sys
 from datetime import datetime
 from datetime import timezone
+from typing import NoReturn
 
 _FUNGUS_HOME = os.environ.get(
     "FUNGUS_HOME",
@@ -286,7 +287,7 @@ def cmd_clean(args: list[str]) -> None:
 # ── Helpers ────────────────────────────────────────────────────
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
     """Print error to stderr and exit."""
     print(f"Error: {msg}", file=sys.stderr)
     sys.exit(1)

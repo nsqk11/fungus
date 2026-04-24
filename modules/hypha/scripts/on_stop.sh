@@ -7,35 +7,40 @@
 # @description Capture assistant response and tool chain as spores
 set -euo pipefail
 
-STDIN=$(cat)
-[ -z "$STDIN" ] && exit 0
+stdin=$(cat)
+[ -z "$stdin" ] && exit 0
 
-MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
+memory() {
+  python3.12 "$FUNGUS_HOME/hooks/memory.py" "$@"
+}
 
 # Store stop spore
-$MEMORY add --stage spore --hook stop --data "$STDIN"
+memory add --stage spore --hook stop --data "$stdin"
 
 # Find boundary: last userPromptSubmit id
-BOUNDARY=$($MEMORY query --sql \
+boundary=$(memory query --sql \
   "SELECT id FROM memory WHERE hook='userPromptSubmit' ORDER BY id DESC LIMIT 1")
-[ -z "$BOUNDARY" ] && exit 0
+[ -z "$boundary" ] && exit 0
+
+# Validate boundary is numeric (defense against injection)
+[[ "$boundary" =~ ^[0-9]+$ ]] || exit 0
 
 # Collect tool names from preToolUse spores after boundary
-CHAIN=$($MEMORY query --sql \
+chain=$(memory query --sql \
   "SELECT json_extract(data, '\$.tool_name') FROM memory
-   WHERE hook='preToolUse' AND id > '$BOUNDARY'
+   WHERE hook='preToolUse' AND id > '$boundary'
      AND json_extract(data, '\$.tool_name') NOT IN
          ('fs_read','fs_write','grep','glob','code','todo_list')")
-[ -z "$CHAIN" ] && exit 0
+[ -z "$chain" ] && exit 0
 
 # Aggregate into comma-separated string
-TOOLS=$(echo "$CHAIN" | paste -sd,)
+tools=$(echo "$chain" | paste -sd,)
 
 # Delete aggregated preToolUse spores
-$MEMORY query --sql \
-  "DELETE FROM memory WHERE hook='preToolUse' AND id > '$BOUNDARY'" >/dev/null
+memory query --sql \
+  "DELETE FROM memory WHERE hook='preToolUse' AND id > '$boundary'" >/dev/null
 
-$MEMORY add \
+memory add \
   --stage spore \
   --hook toolChain \
-  --data "{\"tools\":\"$TOOLS\"}"
+  --data "{\"tools\":\"$tools\"}"

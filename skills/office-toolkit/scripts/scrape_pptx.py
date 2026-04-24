@@ -9,6 +9,8 @@ from typing import Any
 
 from lxml import etree
 
+from _common import parse_rels as _parse_rels
+
 # ── Namespaces ─────────────────────────────────────────────────
 
 _NS = {
@@ -33,9 +35,6 @@ _TITLE_TYPES = {"title", "ctrTitle"}
 
 
 # ── Relationship helpers ───────────────────────────────────────
-
-
-from _common import parse_rels as _parse_rels
 
 
 def _slide_order(zf: zipfile.ZipFile) -> list[str]:
