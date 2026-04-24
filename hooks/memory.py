@@ -275,11 +275,6 @@ def cmd_clean(args: list[str]) -> None:
         conn.execute(
             "DELETE FROM memory WHERE stage IN ('skipped', 'fruiting')"
         )
-        conn.execute(
-            "DELETE FROM memory WHERE stage = 'network' AND id NOT IN"
-            " (SELECT id FROM memory WHERE stage = 'network'"
-            "  ORDER BY timestamp DESC LIMIT 50)"
-        )
     _connect().execute("VACUUM")
     print("OK: clean")
 
