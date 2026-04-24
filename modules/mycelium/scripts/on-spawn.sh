@@ -8,10 +8,6 @@ set -euo pipefail
 
 MEMORY="python3.12 $FUNGUS_HOME/hooks/memory.py"
 
-echo '<memory-reminder>
-Before answering questions, search the fungus-memory knowledge base for relevant past decisions, preferences, and lessons learned.
-</memory-reminder>'
-
 # Check for undigested spores
 count=$($MEMORY count --stage spore)
 [ "$count" = "0" ] && exit 0
