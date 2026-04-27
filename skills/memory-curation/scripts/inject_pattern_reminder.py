@@ -5,18 +5,27 @@
 # @description Inject a reminder when there are parsed entries ready
 #   for pattern review, listing top recurring keywords.
 
+import json
 import subprocess
 from collections import Counter
 from pathlib import Path
 
-import memory
 from _common import emit_reminder
 
+MEMORY_PY = str(Path(__file__).parent / "memory.py")
 TOP_N = 5
 
 
+def _list_parsed() -> list[dict]:
+    result = subprocess.run(
+        ["python3.12", MEMORY_PY, "list", "--stage", "parsed"],
+        capture_output=True, text=True, check=False,
+    )
+    return [json.loads(line) for line in result.stdout.splitlines() if line]
+
+
 def main() -> None:
-    parsed = [e for e in memory.load() if e["stage"] == "parsed"]
+    parsed = _list_parsed()
     if not parsed:
         return
     keywords = Counter(kw for e in parsed for kw in e.get("keywords", []))

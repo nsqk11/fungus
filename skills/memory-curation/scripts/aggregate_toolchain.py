@@ -3,58 +3,63 @@
 # @priority 20
 # @skill memory-curation
 # @description Aggregate preToolUse raw entries since last user prompt
-#   into a single toolChain raw entry. Delete the individual preToolUse
-#   entries afterwards.
+#   into a single toolChain raw entry.
 
 import json
-from datetime import datetime, timezone
+import subprocess
 from pathlib import Path
 
-import memory
+MEMORY_PY = str(Path(__file__).parent / "memory.py")
+
+
+def _list_raw() -> list[dict]:
+    result = subprocess.run(
+        ["python3.12", MEMORY_PY, "list", "--stage", "raw"],
+        capture_output=True, text=True, check=False,
+    )
+    return [json.loads(line) for line in result.stdout.splitlines() if line]
 
 
 def main() -> None:
-    entries = memory.load()
+    entries = _list_raw()
 
-    # Find the last userPromptSubmit to mark the turn boundary.
+    # Find the last userPromptSubmit as turn boundary.
     boundary_idx = -1
     for i in range(len(entries) - 1, -1, -1):
-        e = entries[i]
-        if e["stage"] == "raw" and e["hook"] == "userPromptSubmit":
+        if entries[i]["hook"] == "userPromptSubmit":
             boundary_idx = i
             break
     if boundary_idx < 0:
         return
 
-    # Collect preToolUse entries after the boundary.
     tool_entries = [
         e for e in entries[boundary_idx + 1:]
-        if e["stage"] == "raw" and e["hook"] == "preToolUse"
+        if e["hook"] == "preToolUse"
     ]
     if not tool_entries:
         return
 
     tool_names = [e["data"].get("tool_name", "") for e in tool_entries]
+    chain_data = {"tools": tool_names, "refs": [e["id"] for e in tool_entries]}
 
-    # Build toolChain entry.
-    next_entries = [e for e in entries if e not in tool_entries]
-    chain_id = datetime.now(timezone.utc).strftime("%Y%m%d")
-    existing_today = [e["id"] for e in next_entries if e["id"].startswith(chain_id)]
-    seq = max((int(i[8:]) for i in existing_today), default=0) + 1
-    chain_id = f"{chain_id}{seq:03d}"
+    # Insert the aggregated chain entry.
+    subprocess.run(
+        ["python3.12", MEMORY_PY, "add",
+         "--stage", "raw",
+         "--hook", "toolChain",
+         "--data", json.dumps(chain_data)],
+        check=False,
+    )
 
-    next_entries.append({
-        "id": chain_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "stage": "raw",
-        "hook": "toolChain",
-        "data": {"tools": tool_names},
-        "summary": "",
-        "keywords": [],
-        "refs": [e["id"] for e in tool_entries],
-        "category": "",
-    })
-    memory.save(next_entries)
+    # Drop individual preToolUse entries by marking them dropped.
+    for e in tool_entries:
+        subprocess.run(
+            ["python3.12", MEMORY_PY, "update",
+             "--id", e["id"],
+             "--field", "stage",
+             "--value", "dropped"],
+            check=False,
+        )
 
 
 if __name__ == "__main__":

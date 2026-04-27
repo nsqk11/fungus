@@ -21,7 +21,7 @@ def main() -> None:
     if payload.get("tool_response", {}).get("success") is not False:
         return
     subprocess.run(
-        ["python3.12", MEMORY_PY, "insert",
+        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
          "--hook", "postToolUse",
          "--data", json.dumps(payload)],
         check=False,
