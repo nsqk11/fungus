@@ -1,0 +1,100 @@
+#!/usr/bin/env python3.12
+"""Router — route hook events to skill scripts.
+
+Reads hook payload from stdin, extracts `hook_event_name`, then scans
+`skills/*/scripts/*.{sh,py}` for matching `@hook` annotations and
+executes them in priority order. Each script receives the original
+stdin payload unchanged.
+
+Usage:
+  Kiro invokes this as the registered hook handler. Not called directly.
+
+Annotations (first 15 lines of each script):
+  # @hook <event-name>       required
+  # @priority <integer>      required, lower runs first
+  # @skill <name>            required, must match parent dir
+  # @description <text>      required
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SKILLS_DIR = REPO_ROOT / "skills"
+_REQUIRED_KEYS = frozenset({"hook", "priority", "skill", "description"})
+_MAX_SCAN_LINES = 15
+
+
+def _read_hook_name(payload: str) -> str:
+    """Extract hook_event_name from JSON payload. Empty on failure."""
+    try:
+        return json.loads(payload).get("hook_event_name", "")
+    except json.JSONDecodeError:
+        return ""
+
+
+def _parse_annotations(path: Path) -> dict[str, str] | None:
+    """Return annotations dict if all required keys are present."""
+    annotations: dict[str, str] = {}
+    with path.open() as f:
+        for _, line in zip(range(_MAX_SCAN_LINES), f):
+            stripped = line.strip()
+            if stripped.startswith("# @"):
+                key, _, value = stripped[3:].partition(" ")
+                annotations[key] = value.strip()
+    return annotations if _REQUIRED_KEYS <= annotations.keys() else None
+
+
+def _resolve(hook: str) -> list[tuple[Path, str]]:
+    """Return (script_path, skill) pairs matching hook, sorted by priority."""
+    if not SKILLS_DIR.is_dir():
+        return []
+
+    matches: list[tuple[int, Path, str]] = []
+    for script in SKILLS_DIR.glob("*/scripts/*"):
+        if script.name.startswith("_"):
+            continue
+        if script.suffix not in (".py", ".sh"):
+            continue
+        ann = _parse_annotations(script)
+        if ann is None or ann["hook"] != hook:
+            continue
+        try:
+            priority = int(ann["priority"])
+        except ValueError:
+            continue
+        matches.append((priority, script, ann["skill"]))
+
+    matches.sort(key=lambda m: m[0])
+    return [(path, skill) for _, path, skill in matches]
+
+
+def _run(script: Path, payload: str) -> None:
+    """Forward payload to script via stdin."""
+    runner = "python3.12" if script.suffix == ".py" else "bash"
+    print(f"[router] → {script.name} ({script.parent.parent.name})",
+          file=sys.stderr)
+    subprocess.run([runner, str(script)], input=payload, text=True, check=False)
+
+
+def main() -> None:
+    if sys.stdin.isatty():
+        return
+    payload = sys.stdin.read()
+    if not payload:
+        return
+
+    hook = _read_hook_name(payload)
+    if not hook:
+        return
+
+    for script, _skill in _resolve(hook):
+        _run(script, payload)
+
+
+if __name__ == "__main__":
+    main()

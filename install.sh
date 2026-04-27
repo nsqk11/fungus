@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh — install Fungus agent to ~/.kiro/skills/fungus/
+# install.sh — install Fungus agent to $KIRO_HOME/skills/fungus/.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -9,7 +9,7 @@ AGENT_FILE="$KIRO_HOME/agents/fungus.json"
 
 echo "Installing Fungus to $INSTALL_DIR ..."
 
-# Check prerequisites
+# Prerequisites
 for cmd in python3.12 git; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "Error: $cmd is required but not found." >&2
@@ -17,49 +17,42 @@ for cmd in python3.12 git; do
   }
 done
 
-# Install Python dependencies
+# Python dependencies (declared by skills that need them)
 if ! python3.12 -c "import atlassian" 2>/dev/null; then
   echo "Installing atlassian-python-api ..."
   python3.12 -m pip install --user atlassian-python-api
 fi
 
-# Clean previous install, preserve data/ and skills/ (skills handled separately)
-if [ -d "$INSTALL_DIR" ]; then
-  echo "Updating existing installation (preserving data/) ..."
-  find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
-    -not -name data -not -name skills -not -name knowledgeBase -exec rm -rf {} + 2>/dev/null || true
-fi
-
-# Copy files (preserve data/ dirs inside skills)
+# Sync repo to install dir, preserving data/ in every skill
 mkdir -p "$INSTALL_DIR"
-for dir in hooks modules prompts skills; do
+for dir in hooks prompts skills knowledgeBase; do
   [ -d "$REPO_ROOT/$dir" ] || continue
   if [ "$dir" = "skills" ]; then
-    # Sync each skill individually, preserving its data/
     for skill in "$REPO_ROOT/$dir"/*/; do
       skill_name="$(basename "$skill")"
       dest="$INSTALL_DIR/$dir/$skill_name"
       mkdir -p "$dest"
-      # Remove non-data contents, then copy
+      # Purge old non-data content
       find "$dest" -mindepth 1 -maxdepth 1 \
         -not -name data -exec rm -rf {} + 2>/dev/null || true
-      # Copy non-data contents from repo
-      for item in "$skill"*; do
-        [ "$(basename "$item")" = "data" ] && continue
+      # Copy non-data content from repo
+      for item in "$skill".* "$skill"*; do
+        name="$(basename "$item")"
+        case "$name" in
+          .|..|data) continue ;;
+        esac
+        [ -e "$item" ] || continue
         cp -r "$item" "$dest/"
       done
-      # Ensure data dir exists
       mkdir -p "$dest/data"
     done
   else
+    rm -rf "$INSTALL_DIR/$dir"
     cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
   fi
 done
 
-# Ensure data directory
-mkdir -p "$INSTALL_DIR/data"
-
-# Clone/update knowledge base repos
+# Clone/update external knowledge base repos
 KB_DIR="$INSTALL_DIR/knowledgeBase"
 mkdir -p "$KB_DIR"
 declare -A KB_REPOS=(
@@ -77,33 +70,49 @@ for name in "${!KB_REPOS[@]}"; do
   fi
 done
 
-# Create agent config (overwrite)
+# Ensure memory.md placeholder exists so Kiro can index the KB on first run
+MEMORY_MD="$INSTALL_DIR/skills/memory-curation/data/memory.md"
+mkdir -p "$(dirname "$MEMORY_MD")"
+[ -f "$MEMORY_MD" ] || echo "# Fungus Memory" > "$MEMORY_MD"
+
+# Generate agent config
 mkdir -p "$KIRO_HOME/agents"
 cat > "$AGENT_FILE" <<AGENT
 {
   "name": "fungus",
-  "description": "An AI agent that grows from experience — like fungi.",
-  "prompt": "You are Fungus — an AI agent that grows from experience.",
+  "description": "General-purpose AI coding agent with persistent memory.",
+  "prompt": "",
+  "mcpServers": {},
   "tools": ["*"],
   "allowedTools": [
     "fs_read",
     "grep",
     "glob",
     "code",
-    "execute_bash",
+    "web_search",
+    "web_fetch",
     "knowledge",
+    "use_aws",
+    "execute_bash",
     "todo_list"
   ],
   "resources": [
-    "file://$INSTALL_DIR/prompts/agent-context.md",
-    "skill://$INSTALL_DIR/**/SKILL.md",
+    "file://$INSTALL_DIR/prompts/system-prompt.md",
+    "file://$INSTALL_DIR/prompts/coding-standards.md",
+    "file://$INSTALL_DIR/prompts/writing-standards.md",
+    "skill://$INSTALL_DIR/skills/**/SKILL.md",
     {
       "type": "knowledgeBase",
-      "source": "file://$INSTALL_DIR/knowledgeBase/styleguide",
-      "name": "google-styleguide",
+      "source": "file://$INSTALL_DIR/skills/memory-curation/data/memory.md",
+      "name": "fungus-memory",
       "indexType": "best",
-      "include": ["**/*.md", "**/*.html", "**/*.xml"],
-      "exclude": [".git/**", ".github/**", "include/**", "assets/**", "_includes/**"],
+      "autoUpdate": true
+    },
+    {
+      "type": "knowledgeBase",
+      "source": "file://$INSTALL_DIR/knowledgeBase/agent-skills-spec.md",
+      "name": "agent-skills-spec",
+      "indexType": "best",
       "autoUpdate": true
     },
     {
@@ -114,25 +123,44 @@ cat > "$AGENT_FILE" <<AGENT
       "include": ["**/*.md"],
       "exclude": [".git/**", ".github/**"],
       "autoUpdate": true
+    },
+    {
+      "type": "knowledgeBase",
+      "source": "file://$INSTALL_DIR/knowledgeBase/styleguide",
+      "name": "google-styleguide",
+      "indexType": "best",
+      "include": ["**/*.md", "**/*.html", "**/*.xml"],
+      "exclude": [".git/**", ".github/**", "include/**", "assets/**", "_includes/**"],
+      "autoUpdate": true
     }
   ],
   "hooks": {
-    "agentSpawn": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh" }
-    ],
-    "userPromptSubmit": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh" }
-    ],
-    "preToolUse": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh" }
-    ],
-    "postToolUse": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh" }
-    ],
-    "stop": [
-      { "command": "bash $INSTALL_DIR/hooks/substrate.sh" }
-    ]
-  }
+    "agentSpawn":       [{ "command": "python3.12 $INSTALL_DIR/hooks/router.py" }],
+    "userPromptSubmit": [{ "command": "python3.12 $INSTALL_DIR/hooks/router.py" }],
+    "preToolUse":       [{ "command": "python3.12 $INSTALL_DIR/hooks/router.py" }],
+    "postToolUse":      [{ "command": "python3.12 $INSTALL_DIR/hooks/router.py" }],
+    "stop":             [{ "command": "python3.12 $INSTALL_DIR/hooks/router.py" }]
+  },
+  "toolsSettings": {
+    "execute_bash": {
+      "autoAllowReadonly": true,
+      "deniedCommands": [
+        "rm .*",
+        "rmdir .*",
+        "mv .*",
+        "cp .*",
+        "chmod .*",
+        "chown .*",
+        "dd .*",
+        "mkfs .*",
+        "\\\\>.*",
+        "tee .*"
+      ]
+    }
+  },
+  "includeMcpJson": true,
+  "model": null,
+  "keyboardShortcut": "alt+f"
 }
 AGENT
 echo "Agent config created: $AGENT_FILE"

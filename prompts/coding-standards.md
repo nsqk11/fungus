@@ -1,68 +1,71 @@
-# Coding Style
+# Coding Standards
 
-Code standards for the Fungus repository.
+Project-specific coding conventions for the Fungus repository.
 
-## Style Guide
+## Scope
 
-Apply [Google Style Guide](https://google.github.io/styleguide/)
-for the corresponding language. Refer to the `google-styleguide` knowledge base
-for specific rules.
+Applies to all code written in this repository, regardless of language.
+Supplements but does not replace the Google Style Guide.
+
+## Authority
+
+Defer to the Google Style Guide (indexed as a knowledge base) for
+language-specific rules: naming, layout, formatting, and idioms.
+Search the KB when in doubt for the target language.
+
+This file defines only the design principles and commit conventions
+that are specific to Fungus and not covered by the upstream guide.
 
 ## Design Principles
 
-Apply these principles to all code.
+Apply these to all code. Each principle has one-line definition and
+one-line smell test.
 
 ### KISS — Keep It Simple
 
 Write the simplest solution that works.
-If code needs a comment to explain *what* it does (not *why*),
-refactor until it speaks for itself.
+Smell: code needs a comment to explain *what* it does, not *why*.
 
 ### YAGNI — You Aren't Gonna Need It
 
-Do not build for hypothetical future requirements.
-Implement what is needed today.
-Simple code is easy to change when the future arrives.
+Implement what today's requirement needs. No hypothetical hooks.
+Smell: a parameter or abstraction with no current caller.
 
 ### DRY — Don't Repeat Yourself
 
-Give every piece of knowledge a single, authoritative representation.
-If the same logic appears twice, extract it.
-If the same constant appears twice, name it.
+Give every piece of knowledge a single authoritative representation.
+Smell: the same constant or logic appears twice.
 
 ### SoC — Separation of Concerns
 
 Give each file, function, and module one reason to change.
-Keep parsing, logic, and I/O in separate functions.
-Split a module that does two things.
+Smell: parsing, business logic, and I/O live in the same function.
 
 ### SOLID
 
-- **Single Responsibility**: one function, one job.
-- **Open/Closed**: extend through composition, not modification.
-- **Liskov Substitution**: honor the same contract.
-- **Interface Segregation**: depend on narrow interfaces.
-- **Dependency Inversion**: depend on abstractions.
+- **S**ingle Responsibility: one function, one job.
+- **O**pen/Closed: extend through composition, not modification.
+- **L**iskov Substitution: honor the same contract.
+- **I**nterface Segregation: depend on narrow interfaces.
+- **D**ependency Inversion: depend on abstractions.
 
 ### LoD — Law of Demeter
 
-Only talk to direct dependencies.
-Pass data, not deep object graphs.
-If you see `a.b.c.d`, refactor.
+Only talk to direct dependencies. Pass data, not deep object graphs.
+Smell: `a.b.c.d` — refactor.
 
-### COI — Composition Over Inheritance
+### CoI — Composition over Inheritance
 
 Build behavior by combining small, focused functions.
-Prefer has-a over is-a.
-Do not use class inheritance for code reuse.
+Smell: class inheritance used for code reuse rather than subtyping.
 
 ## Commit Messages
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+Use Conventional Commits.
 
 ```
 <type>: <short summary>
 ```
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
-Write in imperative mood, lowercase, no period, max 72 characters.
+Imperative mood, lowercase, no period, max 72 characters.
