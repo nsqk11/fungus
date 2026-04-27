@@ -1,176 +1,103 @@
-<div align="center">
+# Fungus
 
-<img src="assets/banner.png" alt="Fungus" width="800">
+General-purpose AI coding agent for [Kiro CLI](https://github.com/kirolabs/kiro)
+with persistent memory and a skill-growth pipeline.
 
-# 🍄 Fungus
+## What it does
 
-**An AI agent that grows from experience — like fungi.**
+Fungus runs on Kiro CLI and adds three things on top of a standard agent:
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
-[![GitHub stars](https://img.shields.io/github/stars/nsqk11/fungus?style=social)](https://github.com/nsqk11/fungus)
-[![Last commit](https://img.shields.io/github/last-commit/nsqk11/fungus)](https://github.com/nsqk11/fungus/commits)
+- **Long-term memory** — every interaction is captured, parsed, and
+  promoted into durable notes that persist across sessions.
+- **Skill growth** — recurring patterns in memory become candidates
+  for new skills; mature patterns are written as reusable `SKILL.md`.
+- **Self-contained skills** — each skill is a drop-in directory with
+  its own hooks, scripts, references, and data. Skills can be added
+  or removed without touching the core.
 
-*Hyphae sense the soil. Mycelium digests the nutrients. Fruiting bodies emerge.*
-
-[What is Fungus?](#what-is-fungus) · [Quickstart](#quickstart) · [How It Works](#how-it-works) · [Structure](#structure)
-
-</div>
-
----
-
-## 🌱 What is Fungus?
-
-Fungus is an AI agent built on [Kiro CLI](https://github.com/kirolabs/kiro).
-
-Like a real fungus, it starts invisible. **Hyphae** — the finest tips of the
-network — extend into every interaction, sensing corrections, failed commands,
-and patterns you might not notice yourself. These raw signals are spores,
-scattered and unprocessed.
-
-Beneath the surface, the **mycelial network** quietly digests these spores into
-nutrients — structured knowledge that strengthens the network with every session.
-The more it absorbs, the sharper its hyphae become.
-
-When enough nutrients accumulate around a recurring pattern, a **fruiting body**
-emerges — a new skill, ready to use. The mushroom you see above ground is just
-the visible tip; the real intelligence lives in the network below.
-
-And like any fruiting body, it releases spores back into the soil — every skill
-in use generates new interactions, new signals, new raw material for the hyphae
-to sense. The cycle continues.
-
-```
-     spores          nutrients        fruiting
-Soil ───→ Hypha ───→ Mycelium ───→ Fruit
-  ↑                                   │
-  └──────────── spores ───────────────┘
-```
-
-## ⚡ Quickstart
+## Quickstart
 
 ```bash
-git clone https://github.com/nsqk11/fungus.git
+git clone <this-repo> fungus
 cd fungus
 bash install.sh
+kiro-cli chat --agent fungus
 ```
 
-> **Prerequisites:** [Kiro CLI](https://github.com/kirolabs/kiro) · Python 3.12+ · Git · Bash ≥ 4.0
+### Prerequisites
 
-## 🔬 How It Works
+- [Kiro CLI](https://github.com/kirolabs/kiro)
+- Python 3.12+
+- Git, Bash ≥ 4.0
 
-Fungus hooks into the Kiro CLI lifecycle. Each hook is a patch of soil — hyphae
-extend into it, sense what's there, and feed the network.
-
-| Module | Role | When |
-|--------|------|------|
-| **Hypha** | Sense signals, filter noise | Every interaction |
-| **Mycelium** | Digest spores into structured nutrients | Session start |
-| **Fruit** | Detect mature patterns, produce new skills | Session start |
-
-Hyphae sense silently in the background.
-Mycelium and Fruit prompt the agent at session start —
-the user decides when to digest or review.
-
-### Sensing and Filtering
-
-Hyphae don't capture blindly — structural filters discard noise at the source:
-
-| Hook | What Passes | What Gets Dropped |
-|------|-------------|-------------------|
-| `userPromptSubmit` | Prompts > 5 chars | Trivial acks ("ok", "嗯") |
-| `preToolUse` | Non-self-referential, non-read calls; style guide reminder on `fs_write` | `memory.py` calls; `fs_read`, `grep`, `glob`, `code`, `todo_list` |
-| `postToolUse` | Tool failures only | Successful tool results |
-| `stop` | All assistant responses | Nothing |
-
-At the end of each turn, Hypha aggregates the tool sequence into a single
-`toolChain` spore and removes the individual `preToolUse` spores.
-This gives Mycelium a clean signal: what the user asked, what tools were used,
-whether anything failed, and what the agent concluded.
-
-### Data Flow
-
-Nutrients flow in one direction — from raw spores to mature memory:
-
-```
-spore → nutrient → network    (permanent memory)
-spore → nutrient → fruiting   (skill candidate)
-spore → skipped               (no value)
-  ↑        ↑          ↑           ↑
-Hypha    Mycelium    Fruit     substrate
-writes   writes      writes    cleans
-```
-
-Each module writes to its own partition in `memory.db`.
-Memory is shared — a single `data/memory.db` serves all agents.
-Substrate runs `clean` on `agentSpawn` before any module —
-removing `skipped` and consumed `fruiting` entries.
-Boundaries are declared in each script's annotations —
-no central config:
-
-```python
-# @hook postToolUse
-# @priority 10
-# @module hypha
-# @reads spore
-# @writes spore
-# @description Sense tool errors from environment
-```
-
-The substrate scans these annotations at runtime
-to route hooks to the correct scripts.
-## 📚 Knowledge Bases
-
-Install clones reference repos into `knowledgeBase/` for agent KB indexing:
-
-| Repo | Content |
-|------|---------|
-| [google/styleguide](https://github.com/google/styleguide) | Coding style rules (Python, Shell, JS, HTML/CSS, etc.) |
-| [design-patterns-for-humans](https://github.com/kamranahmedse/design-patterns-for-humans) | GoF design patterns in plain language |
-
-Hypha reminds the agent to search these KBs:
-- **agentSpawn** — design patterns
-- **preToolUse (fs_write)** — style guide
-
-## 🍄 Grown Skills
-
-Skills are the mushrooms — visible outputs of the underground network.
-
-| Skill | Description |
-|-------|-------------|
-| [atlassian-api](skills/atlassian-api/) | Unified REST API client for Confluence and Jira |
-| [office-toolkit](skills/office-toolkit/) | Scrape and patch Office documents (docx, pptx, xlsx) via XML |
-
-## 📁 Structure
+## Structure
 
 ```
 fungus/
-├── assets/                      Images
-├── data/
-│   └── memory.db              Shared memory (gitignored)
+├── install.sh                  Installs to $KIRO_HOME/skills/fungus
 ├── hooks/
-│   ├── substrate.sh             Signal conductor — reads hook from stdin, routes to modules
-│   ├── substrate.py             Scan annotations, match hook, sort by priority
-│   ├── memory.py                CRUD operations for memory.db
-│   └── README.md                Hook payload reference
-├── modules/
-│   ├── hypha/                   Sense — explore and detect signals
-│   │   ├── SKILL.md
-│   │   └── scripts/
-│   ├── mycelium/                Digest — break down and store knowledge
-│   │   ├── SKILL.md
-│   │   └── scripts/
-│   └── fruit/                   Grow — detect patterns, produce skills
-│       ├── SKILL.md
-│       └── scripts/
-├── skills/                      Mushrooms — grown by the network
-│   ├── atlassian-api/
-│   └── office-toolkit/
-├── prompts/                     Shared prompt frameworks
-├── install.sh
-└── LICENSE
+│   └── router.py               Single entry point; routes hook events
+│                               to skill scripts by annotation
+├── prompts/
+│   ├── system-prompt.md        Agent identity and behavior rules
+│   ├── coding-standards.md     Project coding conventions
+│   └── writing-standards.md    Project writing conventions
+├── knowledgeBase/              Reference material indexed as KB
+│   └── agent-skills-spec.md    Skill format specification
+└── skills/                     Self-contained skill directories
+    ├── memory-curation/        Memory capture, curation, growth
+    ├── atlassian-api/          Confluence / Jira access
+    ├── office-toolkit/         Office document scrape / patch
+    └── prompt-refinement/      Agent prompt refinement guide
 ```
 
-## 📄 License
+## How the memory pipeline works
+
+```
+hook event ──→ capture_*.py ──→ raw (memory.db)
+                                   │
+                                   ↓ parse-protocol (agent-guided)
+                               parsed (memory.db)
+                                   │
+                                   ├─→ longterm  (memory.db)
+                                   │     │
+                                   │     └─→ memory.md (KB-indexed)
+                                   │
+                                   └─→ candidate (memory.db)
+                                         │
+                                         └─→ new skill in skills/
+```
+
+Hook scripts under `skills/memory-curation/scripts/` capture raw
+signals. The agent parses them when prompted by
+`<memory-curation-reminder>` tags injected at session start. Mature
+patterns graduate into new skills through the pattern-protocol flow.
+
+## Hook routing
+
+`hooks/router.py` is the single entry point registered with Kiro.
+It scans `skills/*/scripts/*.{py,sh}` for annotation headers:
+
+```python
+# @hook userPromptSubmit
+# @priority 10
+# @skill memory-curation
+# @description Capture non-trivial user prompts as raw entries.
+```
+
+Scripts matching the current hook event run in priority order. Files
+starting with `_` are skipped (used for shared utilities).
+
+## Adding a new skill
+
+1. Create `skills/<name>/` with a `SKILL.md` that follows the format
+   in the `agent-skills-spec` KB and the Description Quality Checklist
+   in `prompts/writing-standards.md`.
+2. Add `scripts/` with any hook handlers (annotated) or CLI tools.
+3. Add `references/` for progressive-disclosure content if the skill
+   has deep operational detail.
+4. Run `bash install.sh` to sync and re-register.
+
+## License
 
 [MIT](LICENSE)

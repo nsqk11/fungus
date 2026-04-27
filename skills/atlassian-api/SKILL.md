@@ -1,6 +1,6 @@
 ---
 name: atlassian-api
-description: "[tool] Atlassian token management and Confluence page caching. Use when managing PATs, fetching cached pages, or searching local page index. Trigger on mentions of 'token', 'PAT', '401', '403', 'page cache', or 'lookup'. For all other Confluence/Jira API calls, use atlassian-python-api library directly. Do NOT wrap standard API calls — agent calls the library."
+description: "Atlassian token management and Confluence page caching. Use when managing PATs, fetching cached pages, or searching local page index. Trigger on mentions of 'token', 'PAT', '401', '403', 'page cache', or 'lookup'. For all other Confluence/Jira API calls, use atlassian-python-api library directly. Do NOT wrap standard API calls — agent calls the library."
 ---
 
 # atlassian-api

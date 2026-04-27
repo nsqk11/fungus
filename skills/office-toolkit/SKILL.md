@@ -1,6 +1,6 @@
 ---
 name: office-toolkit
-description: "[tool] Scrape and patch Office documents (docx, pptx,
+description: "Scrape and patch Office documents (docx, pptx,
   xlsx) and PDF into JSON via XML. Use when reading or modifying
   document content. Trigger on mentions of 'docx', 'pptx', 'xlsx',
   'pdf', 'scrape', 'patch', 'Office document', or 'slide content'.

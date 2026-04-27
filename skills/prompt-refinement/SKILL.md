@@ -1,6 +1,6 @@
 ---
 name: prompt-refinement
-description: "[guide] Extract behavior principles from external
+description: "Extract behavior principles from external
   projects and refine personal agent prompts. Use when
   evaluating GitHub repos, frameworks, or methodologies
   for agent behavior ideas, or when improving agent-prompt.md

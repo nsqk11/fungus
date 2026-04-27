@@ -1,4 +1,19 @@
+# Runtime data (not tracked)
+**/data/memory.db
+**/data/memory.md
+**/data/store.db
+
+# Cloned knowledge bases (provisioned by install.sh)
+knowledgeBase/styleguide/
+knowledgeBase/design-patterns-for-humans/
+
+# Python artifacts
 __pycache__/
 *.pyc
-data/
-knowledgeBase/
+*.pyo
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+.DS_Store

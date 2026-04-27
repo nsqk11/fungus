@@ -1,42 +1,57 @@
-# Writing Style
+# Writing Standards
 
-Writing standards for all documentation and prompts in this repository.
+Project-specific writing conventions for the Fungus repository.
 
-## Language
+## Scope
 
-- English only. No mixed languages.
-- Use American English spelling (behavior, not behaviour).
+Applies to all documentation, prompts, and `SKILL.md` bodies in this
+repository. Does not govern code comments (see `coding-standards.md`).
+
+## Authority
+
+Defer to the Google Developer Documentation Style Guide (indexed as a
+knowledge base) for general writing rules: language, grammar, tone,
+formatting, and terminology. Search the KB when in doubt.
+
+This file defines only the conventions that are specific to Fungus and
+not covered by the upstream guide.
 
 ## Voice by Document Type
 
-| Type | Examples | Voice |
-|------|----------|-------|
-| Identity / context | agent-context.md (role section) | Descriptive: "You are...", "This project uses..." |
-| Rules / constraints | coding-standards.md, agent-context.md (rules) | Imperative: "Follow...", "Never...", "Always..." |
-| Templates / guides | `<description>` tags | Descriptive: "This section covers...", "Given the role above..." |
-| SKILL.md body | Module and skill definitions | Imperative: "Sense signals", not "This module senses signals" |
-| Code comments | Inline and docstrings | Descriptive for *what*, imperative for *instructions* |
+Different files serve different purposes and require different voices.
 
-## Formatting
+| Type | Example | Voice |
+|------|---------|-------|
+| Identity / context | `<identity>` section | Descriptive |
+| Rules / constraints | `<rules>`, standards files | Imperative |
+| SKILL.md body | `skills/*/SKILL.md` | Imperative |
+| Reference / guide | `references/*.md`, README | Descriptive |
+| Code comments | Inline, docstrings | What: descriptive. How: imperative. |
 
-- One sentence per line in Markdown source (easier diffs).
-- Max 80 characters per line in Markdown source.
-- Use ATX headers (`#`), not Setext (underlines).
-- Use `-` for unordered lists, `1.` for ordered lists.
-- Use backticks for code references: `mycelium`, `memory.db`.
-- Use `**bold**` for key terms on first mention only.
+## Project-Specific Conventions
 
-## Structure
+- One sentence per line in Markdown source. Easier diffs and reviews.
+- Keep lines within reasonable width for human review.
+  Long sentences in LLM-facing content (e.g., `system-prompt.md`)
+  may exceed typical line length when breaking would harm clarity.
+- SKILL.md `description` frontmatter must state what the skill does
+  and when to trigger, include relevant trigger keywords, and list
+  `Do NOT` exclusions for adjacent concerns.
+- Do not invent arbitrary numeric limits ("max 5 items"). Constrain
+  quality with principles. Exceptions apply only when an external
+  standard sets a specific number, such as the 72-character summary
+  limit from Conventional Commits.
 
-- Lead with the most important information.
-- Keep paragraphs short.
-- Prefer tables over long prose for comparisons.
-- Prefer lists over paragraphs for enumerations.
+## Description Quality Checklist
 
-## Constraints
+Apply when writing or reviewing any skill `description` frontmatter.
 
-- Do not invent arbitrary numeric limits (e.g., "max 5 items").
-- Constrain quality with principles ("keep focused", "be concise"),
-  not with counts.
-- Only use specific numbers when backed by an external standard
-  (e.g., Conventional Commits' 72-char summary).
+- States what the skill does in one sentence.
+- States when to trigger (reminder tags, user intents, file types).
+- Includes trigger keywords — the words a user would naturally say
+  when they need this skill.
+- Includes `Do NOT` exclusions — adjacent concerns that belong to
+  other skills.
+- Pushy enough: would the agent pick this skill even if the user
+  does not name it explicitly?
+- Stays under 1024 characters (per the `agent-skills-spec` KB).
