@@ -23,6 +23,19 @@ if ! python3.12 -c "import atlassian" 2>/dev/null; then
   python3.12 -m pip install --user atlassian-python-api
 fi
 
+# Remove legacy top-level dirs that v2 no longer uses
+for legacy in modules; do
+  [ -d "$INSTALL_DIR/$legacy" ] && rm -rf "$INSTALL_DIR/$legacy"
+done
+
+# Remove orphan skill dirs that no longer exist in the repo
+if [ -d "$INSTALL_DIR/skills" ]; then
+  for installed in "$INSTALL_DIR/skills"/*/; do
+    name="$(basename "$installed")"
+    [ -d "$REPO_ROOT/skills/$name" ] || rm -rf "$installed"
+  done
+fi
+
 # Sync repo to install dir, preserving data/ in every skill
 mkdir -p "$INSTALL_DIR"
 for dir in hooks prompts skills knowledgeBase; do
