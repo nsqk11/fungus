@@ -21,7 +21,7 @@ def main() -> None:
     if len(prompt) <= MIN_LEN:
         return
     subprocess.run(
-        ["python3.12", MEMORY_PY, "insert",
+        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
          "--hook", "userPromptSubmit",
          "--data", json.dumps(payload)],
         check=False,

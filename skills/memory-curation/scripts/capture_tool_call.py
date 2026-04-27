@@ -24,7 +24,7 @@ def main() -> None:
     if "memory.py" in json.dumps(payload):
         return
     subprocess.run(
-        ["python3.12", MEMORY_PY, "insert",
+        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
          "--hook", "preToolUse",
          "--data", json.dumps(payload)],
         check=False,

@@ -5,12 +5,21 @@
 # @description Export parsed and longterm entries to data/memory.md
 #   for knowledge base indexing.
 
+import json
+import subprocess
 from pathlib import Path
 
-import memory
-
+MEMORY_PY = str(Path(__file__).resolve().parent / "memory.py")
 OUT_PATH = Path(__file__).resolve().parent.parent / "data" / "memory.md"
 EXPORT_STAGES = ("parsed", "longterm")
+
+
+def _list_stage(stage: str) -> list[dict]:
+    result = subprocess.run(
+        ["python3.12", MEMORY_PY, "list", "--stage", stage],
+        capture_output=True, text=True, check=False,
+    )
+    return [json.loads(line) for line in result.stdout.splitlines() if line]
 
 
 def _entry_md(e: dict) -> str:
@@ -34,7 +43,9 @@ def _entry_md(e: dict) -> str:
 
 
 def main() -> None:
-    entries = [e for e in memory.load() if e["stage"] in EXPORT_STAGES]
+    entries: list[dict] = []
+    for stage in EXPORT_STAGES:
+        entries.extend(_list_stage(stage))
     entries.sort(key=lambda e: e["timestamp"])
 
     sections = ["# Fungus Memory", ""]

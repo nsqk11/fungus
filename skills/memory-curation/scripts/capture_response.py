@@ -18,7 +18,7 @@ def main() -> None:
     if not payload:
         return
     subprocess.run(
-        ["python3.12", MEMORY_PY, "insert",
+        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
          "--hook", "stop",
          "--data", json.dumps(payload)],
         check=False,
