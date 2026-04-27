@@ -24,8 +24,7 @@ description: "Maintain the agent's long-term memory. Triggered
   - Parse `raw` captures into `parsed` entries with summary and
     keywords.
   - Detect recurring patterns across `parsed` entries.
-  - Promote mature patterns to `candidate` and help the user create
-    new skills.
+  - Promote mature patterns and help the user create new skills.
   - Promote standalone insights to `longterm` memory.
   - Retire valueless entries to `dropped`.
 - **Does not**:
@@ -41,7 +40,8 @@ description: "Maintain the agent's long-term memory. Triggered
   or direct user requests matching the description keywords.
 - **Data store**: `data/memory.db` at the skill root.
 - **Access layer**: `scripts/memory.py` — CRUD for `memory.db`.
-- **Hook scripts**: `scripts/on_*.sh` — capture and reminder injection.
+- **Hook scripts**: `scripts/capture_*.py` — build interaction entries
+  across the prompt-to-stop lifecycle.
 - **References**:
   - `references/parse-protocol.md` — raw to parsed workflow.
   - `references/pattern-protocol.md` — parsed to skill workflow.
@@ -57,9 +57,10 @@ Read the reminder body to determine which.
 Reminder body reports a count of `raw` entries awaiting parsing.
 
 Ask the user whether to parse now. If confirmed, follow
-`references/parse-protocol.md` for each entry: decide whether it
-contains reusable knowledge, write a summary and keywords, and promote
-it to `parsed`. Entries with no value go to `dropped`.
+`references/parse-protocol.md` for each entry: evaluate the complete
+interaction (prompt, tools, response), decide whether it contains
+reusable knowledge, write a summary and keywords, and promote to
+`parsed`. Entries with no value go to `dropped`.
 
 ### Accumulated patterns
 
@@ -68,9 +69,8 @@ keywords.
 
 Ask the user whether to review now. If confirmed, follow
 `references/pattern-protocol.md`: scan `parsed` entries, identify
-recurring patterns, confirm each candidate pattern with the user,
-and create new skills when confirmed. Standalone insights go to
-`longterm`; pattern-forming entries go to `candidate`.
+recurring patterns, confirm each with the user, and create new skills
+when confirmed. Standalone insights go to `longterm`.
 
 ### Ambiguous user message
 

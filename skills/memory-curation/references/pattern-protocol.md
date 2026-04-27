@@ -26,11 +26,10 @@ python3.12 scripts/memory.py update --id <id> --field stage --value longterm
 python3.12 scripts/memory.py update --id <id> --field category --value "<category>"
 ```
 
-Promote entry to `candidate` (skill material, will be cleaned after
-use):
+Drop a valueless entry:
 
 ```bash
-python3.12 scripts/memory.py update --id <id> --field stage --value candidate
+python3.12 scripts/memory.py update --id <id> --field stage --value dropped
 ```
 
 ## Pattern Detection
@@ -74,5 +73,5 @@ following the project's writing standards. This protocol stops here.
 
 After the new skill is written and accepted:
 
-- Entries that formed the pattern → `candidate`.
+- Entries that formed the pattern → `longterm`.
 - Standalone insights discovered during review → `longterm`.

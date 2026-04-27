@@ -2,30 +2,24 @@
 # @hook postToolUse
 # @priority 10
 # @skill memory-curation
-# @description Capture tool failures as raw entries. Successes are dropped.
+# @description Append tool errors to the current pending entry.
 
 import json
-import subprocess
-import sys
-from pathlib import Path
 
-from _common import read_payload
-
-MEMORY_PY = str(Path(__file__).parent / "memory.py")
+from _common import get_pending_entry, read_payload, update_pending_data
 
 
 def main() -> None:
     payload = read_payload()
-    if "memory.py" in json.dumps(payload):
-        return
     if payload.get("tool_response", {}).get("success") is not False:
         return
-    subprocess.run(
-        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
-         "--hook", "postToolUse",
-         "--data", json.dumps(payload)],
-        check=False,
-    )
+    pending = get_pending_entry()
+    if not pending:
+        return
+    entry_id, data = pending
+    error = payload.get("tool_response", {}).get("error", "unknown")
+    data.setdefault("errors", []).append(error)
+    update_pending_data(entry_id, data)
 
 
 if __name__ == "__main__":

@@ -11,9 +11,14 @@ Flat JSON array. Each entry is one record.
   {
     "id": "20260416001",
     "timestamp": "2026-04-16T07:20:00Z",
-    "stage": "raw",
-    "hook": "postToolUse",
-    "data": {},
+    "stage": "pending",
+    "hook": "",
+    "data": {
+      "prompt": "user message text",
+      "tools": ["execute_bash", "fs_read"],
+      "errors": [],
+      "response": "agent response summary"
+    },
     "summary": "",
     "keywords": [],
     "refs": [],
@@ -29,38 +34,52 @@ Flat JSON array. Each entry is one record.
 | `id` | string | yes | `YYYYMMDD` + 3-digit sequence |
 | `timestamp` | string | yes | ISO 8601 UTC |
 | `stage` | string | yes | See Stage enum below |
-| `hook` | string | raw | Hook event that produced this entry |
-| `data` | object | raw | Raw hook stdin, stored as-is |
-| `summary` | string | parsed+ | Condensed description of the signal |
+| `hook` | string | no | Empty for interaction entries |
+| `data` | object | yes | Interaction payload (see below) |
+| `summary` | string | parsed+ | Condensed description |
 | `keywords` | array | parsed+ | For deduplication and pattern detection |
 | `refs` | array | parsed+ | IDs of upstream entries |
 | `category` | string | longterm | Classification label |
+
+### `data` Object
+
+One entry represents one complete interaction (user prompt through
+agent response).
+
+| Key | Type | Set by | Description |
+|-----|------|--------|-------------|
+| `prompt` | string | capture_prompt | User message text |
+| `tools` | array | capture_tool_call | Tool names used during the turn |
+| `errors` | array | capture_tool_error | Tool failure descriptions |
+| `response` | string | capture_response | Agent response summary |
 
 ## Stage Enum
 
 | Stage | Meaning |
 |-------|---------|
-| `raw` | Captured by a hook, not yet parsed |
+| `pending` | Interaction in progress, accumulating data |
+| `raw` | Complete interaction, not yet parsed |
 | `parsed` | Condensed with summary and keywords |
 | `longterm` | Promoted to permanent memory |
-| `candidate` | Pattern formed; awaiting skill creation |
 | `dropped` | No value; will be cleaned |
 
 ## Lifecycle
 
 ```
-raw → parsed → longterm    (permanent memory)
-raw → parsed → candidate   (skill material, cleaned after use)
-raw → dropped              (no value, cleaned)
+pending → raw → parsed → longterm    (permanent memory)
+                       → dropped     (no value, cleaned)
+raw → dropped                        (no value, cleaned)
 ```
 
 Each transition is an in-place update on the same entry.
-One `raw` becomes one `parsed`.
-One `parsed` becomes one `longterm` or one `candidate`.
 
-The on-spawn hook runs a cleanup pass before other handlers.
-Cleanup deletes `dropped` and `candidate` entries and caps
-`longterm` at the newest entries when over limit.
+- `capture_prompt` creates a `pending` entry with the user prompt.
+- `capture_tool_call` and `capture_tool_error` append to the
+  `pending` entry during the turn.
+- `capture_response` finalizes the entry and promotes it to `raw`.
+- The on-spawn hook runs a cleanup pass that deletes `dropped` and
+  stale `pending` entries, and caps `longterm` at the newest entries
+  when over limit.
 
 ## File Location
 
