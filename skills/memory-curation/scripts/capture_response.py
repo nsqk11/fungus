@@ -2,27 +2,28 @@
 # @hook stop
 # @priority 10
 # @skill memory-curation
-# @description Capture agent response summary as raw entry.
+# @description Finalize the pending entry: merge response, promote to raw.
 
 import json
-import subprocess
-from pathlib import Path
+import sqlite3
 
-from _common import read_payload
-
-MEMORY_PY = str(Path(__file__).parent / "memory.py")
+from _common import DB_PATH, get_pending_entry, read_payload
 
 
 def main() -> None:
     payload = read_payload()
-    if not payload:
+    pending = get_pending_entry()
+    if not pending:
         return
-    subprocess.run(
-        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
-         "--hook", "stop",
-         "--data", json.dumps(payload)],
-        check=False,
+    entry_id, data = pending
+    data["response"] = payload.get("assistant_response", "")
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.execute(
+        "UPDATE memory SET stage = 'raw', data = ? WHERE id = ?",
+        (json.dumps(data, ensure_ascii=False), entry_id),
     )
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":

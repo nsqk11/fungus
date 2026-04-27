@@ -2,11 +2,10 @@
 # @hook userPromptSubmit
 # @priority 10
 # @skill memory-curation
-# @description Capture non-trivial user prompts as raw entries.
+# @description Create a pending entry for this interaction.
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from _common import read_payload
@@ -20,10 +19,10 @@ def main() -> None:
     prompt = payload.get("prompt", "")
     if len(prompt) <= MIN_LEN:
         return
+    data = {"prompt": prompt, "tools": [], "errors": [], "response": ""}
     subprocess.run(
-        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
-         "--hook", "userPromptSubmit",
-         "--data", json.dumps(payload)],
+        ["python3.12", MEMORY_PY, "add", "--stage", "pending",
+         "--data", json.dumps(data, ensure_ascii=False)],
         check=False,
     )
 

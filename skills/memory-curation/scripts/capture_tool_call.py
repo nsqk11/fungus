@@ -2,16 +2,10 @@
 # @hook preToolUse
 # @priority 10
 # @skill memory-curation
-# @description Capture non-trivial tool calls as raw entries.
+# @description Append tool name to the current pending entry.
 
-import json
-import subprocess
-import sys
-from pathlib import Path
+from _common import get_pending_entry, read_payload, update_pending_data
 
-from _common import read_payload
-
-MEMORY_PY = str(Path(__file__).parent / "memory.py")
 SKIP_TOOLS = frozenset({"fs_read", "fs_write", "grep", "glob",
                         "code", "todo_list"})
 
@@ -19,16 +13,14 @@ SKIP_TOOLS = frozenset({"fs_read", "fs_write", "grep", "glob",
 def main() -> None:
     payload = read_payload()
     tool = payload.get("tool_name", "")
-    if tool in SKIP_TOOLS:
+    if not tool or tool in SKIP_TOOLS:
         return
-    if "memory.py" in json.dumps(payload):
+    pending = get_pending_entry()
+    if not pending:
         return
-    subprocess.run(
-        ["python3.12", MEMORY_PY, "add", "--stage", "raw",
-         "--hook", "preToolUse",
-         "--data", json.dumps(payload)],
-        check=False,
-    )
+    entry_id, data = pending
+    data.setdefault("tools", []).append(tool)
+    update_pending_data(entry_id, data)
 
 
 if __name__ == "__main__":

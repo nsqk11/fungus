@@ -26,7 +26,7 @@ SKILL_ROOT = os.path.abspath(
 )
 DB_PATH = os.path.join(SKILL_ROOT, "data", "memory.db")
 
-STAGES = frozenset({"raw", "parsed", "longterm", "candidate", "dropped"})
+STAGES = frozenset({"pending", "raw", "parsed", "longterm", "dropped"})
 LONGTERM_CAP = 500
 
 _SCHEMA = """
@@ -179,7 +179,7 @@ def cmd_count(args: list[str]) -> None:
 def cmd_clean(args: list[str]) -> None:
     with _connect() as conn:
         conn.execute(
-            "DELETE FROM memory WHERE stage IN ('dropped', 'candidate')"
+            "DELETE FROM memory WHERE stage IN ('dropped', 'pending')"
         )
         # Cap longterm at newest N
         row = conn.execute(

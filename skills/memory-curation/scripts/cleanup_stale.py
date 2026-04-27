@@ -2,7 +2,7 @@
 # @hook agentSpawn
 # @priority 10
 # @skill memory-curation
-# @description Delete dropped/candidate entries, cap longterm at limit.
+# @description Delete dropped and stale pending entries, cap longterm.
 
 import subprocess
 from pathlib import Path

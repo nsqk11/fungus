@@ -40,38 +40,24 @@ python3.12 scripts/memory.py update --id <id> --field stage --value dropped
 
 ## What to Extract
 
-Extract reusable knowledge from `raw` entries based on their `hook`
-field. Skip everything that does not match these directions.
+Each `raw` entry represents one complete interaction (user prompt,
+tool calls, and agent response stored in `data`). Evaluate the
+interaction as a whole.
 
-### userPromptSubmit
+### Worth keeping
 
 - User preferences and habits.
 - Architecture decisions and rationale.
 - Technical discoveries about tools or systems.
-- Bugs, defects, or anomalies.
+- Bugs, defects, or anomalies and their resolution.
 - Domain knowledge: naming rules, process conventions, reusable facts.
+- Tool combination sequences that solved a non-trivial task.
 
-### toolChain
+### Drop
 
-- Tool combination sequences for a task.
-  Aggregated from individual tool calls within a turn by the stop
-  hook.
-
-### preToolUse
-
-- Normally absent — aggregated into `toolChain` at stop time.
-  If encountered, treat as residual and drop.
-
-### postToolUse
-
-- Error context: what failed, why, and surrounding conditions.
-  Only failure entries reach this stage (successes are filtered
-  at capture time).
-
-### stop
-
-- Agent analysis summaries: reasoning path, conclusions, decision
-  rationale.
+- Routine file reads, simple edits, or navigation with no insight.
+- Trivial confirmations ("好的", "继续", "看看").
+- Interactions where the agent only repeated known information.
 
 ## Flow
 
@@ -79,8 +65,9 @@ field. Skip everything that does not match these directions.
    confirmation.
 2. For each `raw` entry:
    - Read it with `get <id>`.
-   - Check the `hook` field against the matching section above.
-   - If the content matches one of the extraction directions, write
+   - Review `data.prompt`, `data.tools`, `data.errors`, and
+     `data.response` together.
+   - If the interaction matches a "worth keeping" category, write
      a concise summary, pick 2-5 keywords, and promote to `parsed`.
    - Otherwise, drop it.
 3. Report counts at the end: parsed vs dropped.
