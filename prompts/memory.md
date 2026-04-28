@@ -90,7 +90,9 @@ it.
 
 **Worker** — a headless `kiro-cli chat --no-interactive`
 invocation using the default agent. It needs `fs_read` (to read
-the turn file) and `fs_write` (to overwrite it). The worker
+the turn file) and `fs_write` (to overwrite it). The default
+agent must have both tools enabled; without them the worker
+cannot rewrite the turn file and the pipeline stalls. The worker
 prompt is `parse-criteria.md` plus the turn file's path; the
 worker reads the turn, decides keep or drop, and rewrites the
 file.
