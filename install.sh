@@ -111,9 +111,7 @@ cat > "$AGENT_FILE" <<AGENT
   ],
   "resources": [
     "file://$INSTALL_DIR/prompts/system-prompt.md",
-    "file://$INSTALL_DIR/prompts/coding-standards.md",
-    "file://$INSTALL_DIR/prompts/writing-standards.md",
-    "skill://$INSTALL_DIR/skills/**/SKILL.md",
+    "skill://$KIRO_HOME/skills/**/SKILL.md",
     {
       "type": "knowledgeBase",
       "source": "file://$INSTALL_DIR/skills/memory-curation/data/memory.md",
