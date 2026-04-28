@@ -3,6 +3,7 @@
 **/data/memory.md
 **/data/long-term-memory.md
 **/data/current-turn.txt
+**/data/last-parse-output.md
 **/data/audit.db
 **/data/store.db
 

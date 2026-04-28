@@ -8,48 +8,50 @@ set -u
 TURN_FILE="$FUNGUS_ROOT/data/current-turn.txt"
 MEMORY_FILE="$FUNGUS_ROOT/data/long-term-memory.md"
 CRITERIA="$FUNGUS_ROOT/prompts/parse-criteria.md"
-BEGIN_MARK="<<<FUNGUS_MEMORY_BEGIN>>>"
-END_MARK="<<<FUNGUS_MEMORY_END>>>"
+OUTPUT_FILE="$FUNGUS_ROOT/data/last-parse-output.md"
 
 # No turn to parse (capture_prompt.py skipped short prompts, or a
 # prior stop already cleaned up).
 [ -f "$TURN_FILE" ] || exit 0
 
-# Read the hook payload from stdin and append the assistant response.
+# Append the assistant response to the turn file.
 payload="$(cat)"
 response="$(printf '%s' "$payload" | python3.12 -c \
   'import json, sys; print(json.load(sys.stdin).get("assistant_response", ""))')"
 printf 'RESPONSE: %s\n' "$response" >> "$TURN_FILE"
 
-# Build the worker prompt: criteria + turn content.
+# Start from a fresh, empty output file every turn so we never
+# confuse a stale file with this turn's result.
+: > "$OUTPUT_FILE"
+
+# Build the worker prompt: criteria + turn content + output path.
 worker_input="$(cat "$CRITERIA")
 
 ---
 
 Turn to evaluate:
 
-$(cat "$TURN_FILE")"
+$(cat "$TURN_FILE")
 
-# Call the worker synchronously. Captures both stdout and stderr;
-# sentinel markers isolate the entry from any UI noise.
-worker_output="$(kiro-cli chat --no-interactive --trust-all-tools \
-  "$worker_input" 2>&1)"
+---
 
-entry="$(printf '%s' "$worker_output" \
-  | sed -n "/$BEGIN_MARK/,/$END_MARK/p" \
-  | sed '1d;$d')"
+<output_path> = $OUTPUT_FILE
 
-# Trim leading/trailing blank lines.
-entry="$(printf '%s' "$entry" | awk 'NF {p=1} p')"
+Write your result to that path now."
 
-if [ -n "$entry" ]; then
+# Call the worker synchronously. We ignore its stdout entirely —
+# the result is whatever it wrote to $OUTPUT_FILE.
+kiro-cli chat --no-interactive --trust-all-tools \
+  "$worker_input" > /dev/null 2>&1
+
+# Append the entry only if the worker wrote something.
+if [ -s "$OUTPUT_FILE" ]; then
   {
     printf '\n'
-    printf '%s\n' "$entry"
+    cat "$OUTPUT_FILE"
   } >> "$MEMORY_FILE"
 fi
 
-# Clean up scratch. Worker I/O stayed in shell variables.
-command rm -f -- "$TURN_FILE"
+command rm -f -- "$TURN_FILE" "$OUTPUT_FILE"
 
 exit 0
