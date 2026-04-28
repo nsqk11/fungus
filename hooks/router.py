@@ -1,10 +1,10 @@
 #!/usr/bin/env python3.12
-"""Router — route hook events to skill scripts.
+"""Router — route hook events to skill scripts and global hooks.
 
 Reads hook payload from stdin, extracts `hook_event_name`, then scans
-`skills/*/scripts/*.{sh,py}` for matching `@hook` annotations and
-executes them in priority order. Each script receives the original
-stdin payload unchanged.
+`skills/*/scripts/*.{sh,py}` and `hooks/*.{sh,py}` for matching
+`@hook` annotations and executes them in priority order. Each script
+receives the original stdin payload unchanged.
 
 Usage:
   Kiro invokes this as the registered hook handler. Not called directly.
@@ -12,7 +12,7 @@ Usage:
 Annotations (first 15 lines of each script):
   # @hook <event-name>       required
   # @priority <integer>      required, lower runs first
-  # @skill <name>            required, must match parent dir
+  # @skill <name>            required for skill scripts, optional for hooks/
   # @description <text>      required
 """
 
@@ -24,8 +24,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+HOOKS_DIR = REPO_ROOT / "hooks"
 SKILLS_DIR = REPO_ROOT / "skills"
-_REQUIRED_KEYS = frozenset({"hook", "priority", "skill", "description"})
+_REQUIRED_KEYS = frozenset({"hook", "priority", "description"})
 _MAX_SCAN_LINES = 15
 
 
@@ -49,17 +50,25 @@ def _parse_annotations(path: Path) -> dict[str, str] | None:
     return annotations if _REQUIRED_KEYS <= annotations.keys() else None
 
 
-def _resolve(hook: str) -> list[tuple[Path, str]]:
-    """Return (script_path, skill) pairs matching hook, sorted by priority."""
-    if not SKILLS_DIR.is_dir():
-        return []
+def _iter_scripts() -> list[Path]:
+    """Yield candidate scripts from hooks/ and skills/*/scripts/."""
+    scripts: list[Path] = []
+    if HOOKS_DIR.is_dir():
+        for p in HOOKS_DIR.iterdir():
+            if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
+                if p.name != "router.py":
+                    scripts.append(p)
+    if SKILLS_DIR.is_dir():
+        for p in SKILLS_DIR.glob("*/scripts/*"):
+            if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
+                scripts.append(p)
+    return scripts
 
+
+def _resolve(hook: str) -> list[tuple[Path, str]]:
+    """Return (script_path, label) pairs matching hook, sorted by priority."""
     matches: list[tuple[int, Path, str]] = []
-    for script in SKILLS_DIR.glob("*/scripts/*"):
-        if script.name.startswith("_"):
-            continue
-        if script.suffix not in (".py", ".sh"):
-            continue
+    for script in _iter_scripts():
         ann = _parse_annotations(script)
         if ann is None or ann["hook"] != hook:
             continue
@@ -67,17 +76,18 @@ def _resolve(hook: str) -> list[tuple[Path, str]]:
             priority = int(ann["priority"])
         except ValueError:
             continue
-        matches.append((priority, script, ann["skill"]))
+        label = ann.get("skill", "hooks")
+        matches.append((priority, script, label))
 
     matches.sort(key=lambda m: m[0])
-    return [(path, skill) for _, path, skill in matches]
+    return [(path, label) for _, path, label in matches]
 
 
 def _run(script: Path, payload: str) -> None:
     """Forward payload to script via stdin."""
     runner = "python3.12" if script.suffix == ".py" else "bash"
-    print(f"[router] → {script.name} ({script.parent.parent.name})",
-          file=sys.stderr)
+    label = script.parent.parent.name if script.parent.name == "scripts" else "hooks"
+    print(f"[router] → {script.name} ({label})", file=sys.stderr)
     subprocess.run([runner, str(script)], input=payload, text=True, check=False)
 
 
@@ -92,7 +102,7 @@ def main() -> None:
     if not hook:
         return
 
-    for script, _skill in _resolve(hook):
+    for script, _label in _resolve(hook):
         _run(script, payload)
 
 
