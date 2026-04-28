@@ -31,10 +31,10 @@ userPromptSubmit ──→ memory/capture_prompt.py ──→ current-turn.txt (
 preToolUse       ──→ memory/capture_tool.py   ──→ current-turn.txt (tool appended)
 postToolUse      ──→ memory/capture_error.py  ──→ current-turn.txt (error appended)
 stop             ──→ memory/auto_parse.sh     ──→ response appended
-                                              ──→ worker invoked (in-process)
-                                              ──→ entry extracted from stdout
-                                              ──→ entry appended to long-term-memory.md
-                                              ──→ current-turn.txt removed
+                                              ──→ worker invoked
+                                              ──→ worker writes last-parse-output.md
+                                              ──→ non-empty output appended to long-term-memory.md
+                                              ──→ scratch files removed
 ```
 
 One turn = one `userPromptSubmit` → `stop` cycle.
@@ -65,41 +65,44 @@ Underscore prefix makes the router skip it (import-only module).
 entire parse in one shell invocation:
 
 1. Append `RESPONSE: <assistant_response>` to the turn file.
-2. Build worker input by concatenating `prompts/parse-criteria.md`
-   and the turn file.
-3. Call the worker, capturing stdout:
+2. Truncate `data/last-parse-output.md` to zero bytes so a stale
+   output cannot be mistaken for this turn's result.
+3. Build worker input: `parse-criteria.md` + turn content + the
+   absolute path to write to (`<output_path>`).
+4. Call the worker, discarding its stdout:
    ```bash
-   output=$(kiro-cli chat --no-interactive --trust-all-tools "$input" 2>&1)
+   kiro-cli chat --no-interactive --trust-all-tools "$input" \
+     > /dev/null 2>&1
    ```
-4. Extract the entry between sentinel markers:
-   ```bash
-   entry=$(echo "$output" \
-     | sed -n '/<<<FUNGUS_MEMORY_BEGIN>>>/,/<<<FUNGUS_MEMORY_END>>>/p' \
-     | sed '1d;$d')
-   ```
-5. If `$entry` is non-empty, append it to `long-term-memory.md`.
-6. Remove `current-turn.txt`.
+5. If `last-parse-output.md` is non-empty, append it to
+   `long-term-memory.md`.
+6. Remove `current-turn.txt` and `last-parse-output.md`.
 
 **Worker** — a headless `kiro-cli chat --no-interactive`
-invocation using the default agent. No dedicated agent, no tools.
-The worker reads `prompts/parse-criteria.md` and the turn content
-in its prompt, then answers with a sentinel-wrapped Markdown
-entry:
+invocation using the default agent. The worker needs one tool,
+`fs_write`, to write its result. It reads
+`prompts/parse-criteria.md` and the turn content from its prompt,
+then writes either a Markdown memory entry or an empty file to
+`<output_path>`.
+
+Entry format (written to `<output_path>` when keeping):
 
 ```
-<<<FUNGUS_MEMORY_BEGIN>>>
 ## <summary>
 
 Date: YYYY-MM-DD | Tags: tag1, tag2
 
 <optional 1-3 sentence detail>
-<<<FUNGUS_MEMORY_END>>>
 ```
 
-A drop is expressed as empty markers.
+A drop is expressed as an empty file.
+
+Writing via `fs_write` instead of parsing stdout avoids `kiro-cli`'s
+unavoidable ANSI decoration, which would otherwise break any
+boundary-based extraction.
 
 **`prompts/parse-criteria.md`** — the worker's operating manual:
-what to keep, what to drop, the sentinel-wrapped output format.
+what to keep, what to drop, and the file-write output format.
 Loaded into the worker prompt verbatim.
 
 **`data/long-term-memory.md`** — append-only Markdown store,
@@ -121,13 +124,15 @@ Date: YYYY-MM-DD | Tags: tag1, tag2
 
 ```
 $KIRO_HOME/skills/fungus/data/
-├── long-term-memory.md    # long-term store, KB-indexed
-└── current-turn.txt       # scratch, removed after stop
+├── long-term-memory.md     # long-term store, KB-indexed
+├── current-turn.txt        # scratch, removed after stop
+└── last-parse-output.md    # worker output, removed after stop
 ```
 
-Only two files. Worker I/O stays in shell variables and never hits
-disk. A stale `current-turn.txt` at `agentSpawn` indicates a
-crashed prior session and is cleaned up then.
+Worker I/O goes through `last-parse-output.md`, truncated at the
+start of every turn and removed at the end. Stale scratch files
+at `agentSpawn` indicate a crashed prior session and are cleaned
+up then.
 
 ## Design decisions
 
@@ -145,23 +150,24 @@ the store, adding context, latency, and complexity. Occasional
 duplicates cost less than slower parses. Distillation, if ever
 needed, can be added as a separate pass.
 
-**Worker has no tools.** Forcing the worker to call `fs_write`
-would require extra prompting about paths and format. Plain text
-output keeps the prompt minimal. Sentinel markers separate the
-entry from any UI noise in stdout.
-
-**Worker I/O in shell variables.** The parse runs entirely inside
-`auto_parse.sh`. No intermediate files for worker input or output.
+**Worker writes to a file.** Capturing the worker's stdout would
+have been simpler in principle, but `kiro-cli` emits ANSI color
+codes and UI decorations even in `--no-interactive` mode, with no
+documented way to disable them. Those escape sequences can split
+literal boundary markers and corrupt captured content. Having the
+worker call `fs_write` into a known path sidesteps the problem
+entirely. The only prompt cost is telling the worker which path
+to write to.
 
 **Synchronous worker.** Backgrounding with `nohup … &` would let
 the hook return faster but makes cleanup order fragile. The stop
 hook already runs after the turn ends; blocking a few seconds is
 acceptable.
 
-**Scratch file under `data/`, not `/tmp`.** `current-turn.txt`
-must cross multiple hook invocations, so it lives on disk. Keeping
-it under `data/` shares permissions with the store and survives
-reboots for debugging.
+**Scratch files under `data/`, not `/tmp`.** `current-turn.txt`
+must cross multiple hook invocations, so it lives on disk.
+`last-parse-output.md` could have gone in `/tmp`, but keeping all
+runtime state together simplifies debugging and cleanup.
 
 **Memory is a property, not a skill.** There is no `SKILL.md`, no
 description to match, no user-facing trigger. Memory is part of
