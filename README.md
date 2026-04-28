@@ -114,6 +114,9 @@ Each script declares its trigger in a header comment:
 # @description Capture the user prompt into the turn file.
 ```
 
+Skill-owned scripts can also declare `# @skill <name>` so the
+router prints a readable label when dispatching.
+
 Scripts matching the current hook event run in priority order.
 Files starting with `_` are skipped (shared utility modules).
 
@@ -133,7 +136,6 @@ The bundled skills:
 |-------|---------|
 | [`atlassian-api`](skills/atlassian-api) | PAT management and Confluence page caching |
 | [`office-toolkit`](skills/office-toolkit) | Scrape and patch docx/pptx/xlsx/pdf via XML |
-| [`prompt-refinement`](skills/prompt-refinement) | Extract behavior principles from external projects |
 | [`tool-audit`](skills/tool-audit) | Record and report on tool usage |
 
 ## Adding a skill
@@ -172,7 +174,6 @@ fungus/
 └── skills/                    Self-contained skills
     ├── atlassian-api/
     ├── office-toolkit/
-    ├── prompt-refinement/
     └── tool-audit/
 ```
 

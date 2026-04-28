@@ -94,7 +94,7 @@ def main() -> None:
     if status is None:
         return
     summary = _summarize(status, command)
-    print(f"<fungus-reminder>\n{summary}\n</fungus-reminder>")
+    print(f"<git-reminder>\n{summary}\n</git-reminder>")
 
 
 if __name__ == "__main__":

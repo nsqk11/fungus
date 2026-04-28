@@ -1,7 +1,7 @@
 """Shared helpers for hooks/memory/*.py.
 
-Router skips files starting with underscore, so this module is
-import-only (not dispatched as a hook).
+Filename starts with an underscore so router.py skips it during
+hook dispatch — this module is import-only, not a hook itself.
 
 Reads FUNGUS_ROOT from the environment (set by router.py).
 """
