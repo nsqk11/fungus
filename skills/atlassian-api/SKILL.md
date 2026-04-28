@@ -21,9 +21,9 @@ description: "Atlassian token management and Confluence page caching. Use when m
 
 ## Interface
 
-- **Entry**: `python3.12 cli.py <command> [args...]`
+- **Entry**: `python3.12 scripts/cli.py <command> [args...]`
 - **Commands**: `token`, `page`, `lookup`
-- **Help**: `python3.12 cli.py --help` or `python3.12 cli.py <command> --help`
+- **Help**: `python3.12 scripts/cli.py --help` or `python3.12 scripts/cli.py <command> --help`
 - **Output**: stdout (text or JSON). Data in `data/store.db`.
 - **Dependency**: `atlassian-python-api`
 
@@ -41,6 +41,6 @@ Run `python3.12 cli.py --help` for command usage.
 
 For all standard Confluence/Jira API calls, use `atlassian-python-api` library directly.
 
-- **Token**: `python3.12 cli.py token get <domain>`
+- **Token**: `python3.12 scripts/cli.py token get <domain>`
 - **Discover methods**: `python3.12 -c "from atlassian import Confluence; help(Confluence.<method>)"`
 - **Documentation**: https://atlassian-api.readthedocs.io

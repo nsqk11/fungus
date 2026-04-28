@@ -1,10 +1,6 @@
 ---
 name: office-toolkit
-description: "Scrape and patch Office documents (docx, pptx,
-  xlsx) and PDF into JSON via XML. Use when reading or modifying
-  document content. Trigger on mentions of 'docx', 'pptx', 'xlsx',
-  'pdf', 'scrape', 'patch', 'Office document', or 'slide content'.
-  Do NOT use for Confluence pages (use atlassian-api) or plain text."
+description: "Scrape and patch Office documents (docx, pptx, xlsx) and PDF into JSON via XML. Use when reading or modifying document content. Trigger on mentions of 'docx', 'pptx', 'xlsx', 'pdf', 'scrape', 'patch', 'Office document', or 'slide content'. Do NOT use for Confluence pages (use atlassian-api) or plain text."
 ---
 
 # office-toolkit
