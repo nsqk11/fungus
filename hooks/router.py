@@ -4,7 +4,8 @@
 Reads hook payload from stdin, extracts `hook_event_name`, then scans
 `skills/*/scripts/*.{sh,py}` and `hooks/*.{sh,py}` for matching
 `@hook` annotations and executes them in priority order. Each script
-receives the original stdin payload unchanged.
+receives the original stdin payload unchanged, plus `FUNGUS_ROOT`
+in its environment pointing at the repo/install root.
 
 Usage:
   Kiro invokes this as the registered hook handler. Not called directly.
@@ -19,6 +20,7 @@ Annotations (first 15 lines of each script):
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -51,13 +53,19 @@ def _parse_annotations(path: Path) -> dict[str, str] | None:
 
 
 def _iter_scripts() -> list[Path]:
-    """Yield candidate scripts from hooks/ and skills/*/scripts/."""
+    """Yield candidate scripts from hooks/, hooks/*/, and skills/*/scripts/."""
     scripts: list[Path] = []
     if HOOKS_DIR.is_dir():
+        # Top-level hooks (router.py excluded).
         for p in HOOKS_DIR.iterdir():
-            if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
+            if p.is_file() and p.suffix in (".py", ".sh") \
+                    and not p.name.startswith("_"):
                 if p.name != "router.py":
                     scripts.append(p)
+        # One level of grouped hooks: hooks/<group>/*.{py,sh}
+        for p in HOOKS_DIR.glob("*/*"):
+            if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
+                scripts.append(p)
     if SKILLS_DIR.is_dir():
         for p in SKILLS_DIR.glob("*/scripts/*"):
             if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
@@ -86,7 +94,16 @@ def _resolve(hook: str) -> list[tuple[Path, str]]:
 def _run(script: Path, payload: str) -> None:
     """Forward payload to script via stdin."""
     runner = "python3.12" if script.suffix == ".py" else "bash"
-    label = script.parent.parent.name if script.parent.name == "scripts" else "hooks"
+    # Label for diagnostics:
+    #   skills/<name>/scripts/x.py  -> <name>
+    #   hooks/<group>/x.py          -> <group>
+    #   hooks/x.py                  -> hooks
+    if script.parent.name == "scripts":
+        label = script.parent.parent.name
+    elif script.parent.parent == HOOKS_DIR:
+        label = script.parent.name
+    else:
+        label = "hooks"
     print(f"[router] → {script.name} ({label})", file=sys.stderr)
     subprocess.run([runner, str(script)], input=payload, text=True, check=False)
 
@@ -97,6 +114,8 @@ def main() -> None:
     payload = sys.stdin.read()
     if not payload:
         return
+
+    os.environ["FUNGUS_ROOT"] = str(REPO_ROOT)
 
     hook = _read_hook_name(payload)
     if not hook:
