@@ -1,57 +1,68 @@
 #!/bin/bash
 # @hook stop
 # @priority 10
-# @description Finalize the turn, run worker, append memory entry, clean up.
+# @description Finalize current turn, spawn worker async, archive older turns.
 
 set -u
 
-TURN_FILE="$FUNGUS_ROOT/data/current-turn.txt"
-MEMORY_FILE="$FUNGUS_ROOT/data/long-term-memory.md"
+DATA="$FUNGUS_ROOT/data"
+MEMORY_FILE="$DATA/long-term-memory.md"
 CRITERIA="$FUNGUS_ROOT/prompts/parse-criteria.md"
-OUTPUT_FILE="$FUNGUS_ROOT/data/last-parse-output.md"
 
-# No turn to parse (capture_prompt.py skipped short prompts, or a
-# prior stop already cleaned up).
-[ -f "$TURN_FILE" ] || exit 0
+# Locate the current turn file (lexicographic max over turn-*.txt).
+current=""
+for f in "$DATA"/turn-*.txt; do
+  [ -e "$f" ] && current="$f"
+done
 
-# Append the assistant response to the turn file.
+[ -n "$current" ] || exit 0
+
+# Append the assistant response to the current turn file.
 payload="$(cat)"
 response="$(printf '%s' "$payload" | python3.12 -c \
   'import json, sys; print(json.load(sys.stdin).get("assistant_response", ""))')"
-printf 'RESPONSE: %s\n' "$response" >> "$TURN_FILE"
+printf 'RESPONSE: %s\n' "$response" >> "$current"
 
-# Start from a fresh, empty output file every turn so we never
-# confuse a stale file with this turn's result.
-: > "$OUTPUT_FILE"
-
-# Build the worker prompt: criteria + turn content + output path.
-worker_input="$(cat "$CRITERIA")
+# Spawn the worker in the background.
+# It reads the turn file and rewrites it in place: either a
+# Markdown memory entry (keep) or an empty file (drop).
+worker_prompt="$(cat "$CRITERIA")
 
 ---
 
-Turn to evaluate:
+Read the turn data from: $current
+Write your result back to the same path.
+"
+(
+  kiro-cli chat --no-interactive --trust-all-tools \
+    "$worker_prompt" > /dev/null 2>&1
+) &
+disown
 
-$(cat "$TURN_FILE")
+# Archive any non-current turn files whose worker already finished.
+for f in "$DATA"/turn-*.txt; do
+  [ -e "$f" ] || continue
+  [ "$f" = "$current" ] && continue
 
----
+  if [ ! -s "$f" ]; then
+    # Worker chose drop (empty file).
+    command rm -f -- "$f"
+    continue
+  fi
 
-<output_path> = $OUTPUT_FILE
+  # If the file still starts with "PROMPT:", the worker hasn't
+  # finished yet. Leave it for the next stop.
+  first="$(head -n 1 "$f")"
+  case "$first" in
+    PROMPT:*) continue ;;
+  esac
 
-Write your result to that path now."
-
-# Call the worker synchronously. We ignore its stdout entirely —
-# the result is whatever it wrote to $OUTPUT_FILE.
-kiro-cli chat --no-interactive --trust-all-tools \
-  "$worker_input" > /dev/null 2>&1
-
-# Append the entry only if the worker wrote something.
-if [ -s "$OUTPUT_FILE" ]; then
+  # Otherwise the worker has rewritten it into a memory entry.
   {
     printf '\n'
-    cat "$OUTPUT_FILE"
+    cat "$f"
   } >> "$MEMORY_FILE"
-fi
-
-command rm -f -- "$TURN_FILE" "$OUTPUT_FILE"
+  command rm -f -- "$f"
+done
 
 exit 0
