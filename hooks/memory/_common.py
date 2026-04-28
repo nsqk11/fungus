@@ -34,13 +34,9 @@ def read_payload() -> dict:
         return {}
 
 
-def ensure_data_dir() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-
 def new_turn_file() -> Path:
     """Create a new turn file keyed by nanosecond timestamp."""
-    ensure_data_dir()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     return DATA_DIR / f"turn-{time.time_ns()}.txt"
 
 
