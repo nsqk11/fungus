@@ -83,8 +83,8 @@ for name in "${!KB_REPOS[@]}"; do
   fi
 done
 
-# Ensure memory.md placeholder exists so Kiro can index the KB on first run
-MEMORY_MD="$INSTALL_DIR/skills/memory-curation/data/memory.md"
+# Ensure long-term-memory.md placeholder exists so Kiro can index the KB on first run
+MEMORY_MD="$INSTALL_DIR/data/long-term-memory.md"
 mkdir -p "$(dirname "$MEMORY_MD")"
 [ -f "$MEMORY_MD" ] || echo "# Fungus Memory" > "$MEMORY_MD"
 
@@ -114,7 +114,7 @@ cat > "$AGENT_FILE" <<AGENT
     "skill://$KIRO_HOME/skills/**/SKILL.md",
     {
       "type": "knowledgeBase",
-      "source": "file://$INSTALL_DIR/skills/memory-curation/data/memory.md",
+      "source": "file://$INSTALL_DIR/data/long-term-memory.md",
       "name": "fungus-memory",
       "indexType": "best",
       "autoUpdate": true

@@ -1,6 +1,9 @@
 # Runtime data (not tracked)
 **/data/memory.db
 **/data/memory.md
+**/data/long-term-memory.md
+**/data/current-turn.txt
+**/data/audit.db
 **/data/store.db
 
 # Cloned knowledge bases (provisioned by install.sh)
