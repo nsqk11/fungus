@@ -1,13 +1,6 @@
 ---
 name: tool-audit
-description: "Record every tool call made by the agent and provide
-  statistics on usage patterns and failure rates. Triggered
-  automatically by the postToolUse hook on every tool invocation.
-  Use the CLI to inspect which tools are used most, which fail most,
-  and when. Trigger on mentions of 'tool usage', 'tool stats',
-  'audit', 'tool failure', 'which tool', or 'tool frequency'.
-  Do NOT use for recording prompt content or agent responses
-  (use memory-curation)."
+description: "Record every tool call made by the agent and provide statistics on usage patterns and failure rates. Triggered automatically by the postToolUse hook on every tool invocation. Use the CLI to inspect which tools are used most, which fail most, and when. Trigger on mentions of 'tool usage', 'tool stats', 'audit', 'tool failure', 'which tool', or 'tool frequency'. Do NOT use for recording prompt content or agent responses (use memory-curation)."
 ---
 
 # tool-audit
