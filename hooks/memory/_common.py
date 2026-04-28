@@ -11,10 +11,11 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 FUNGUS_ROOT = Path(os.environ["FUNGUS_ROOT"])
-TURN_FILE = FUNGUS_ROOT / "data" / "current-turn.txt"
+DATA_DIR = FUNGUS_ROOT / "data"
 
 NOISE_TOOLS = frozenset({"fs_read", "grep", "glob"})
 MIN_PROMPT_LEN = 5
@@ -34,4 +35,16 @@ def read_payload() -> dict:
 
 
 def ensure_data_dir() -> None:
-    TURN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def new_turn_file() -> Path:
+    """Create a new turn file keyed by nanosecond timestamp."""
+    ensure_data_dir()
+    return DATA_DIR / f"turn-{time.time_ns()}.txt"
+
+
+def latest_turn_file() -> Path | None:
+    """Return the most recent turn file (lexicographic max), or None."""
+    turns = sorted(DATA_DIR.glob("turn-*.txt"))
+    return turns[-1] if turns else None

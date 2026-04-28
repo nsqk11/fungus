@@ -1,9 +1,9 @@
 #!/usr/bin/env python3.12
 # @hook preToolUse
 # @priority 10
-# @description Append TOOL line to current-turn.txt (skipping noise tools).
+# @description Append TOOL line to the current turn file (skipping noise tools).
 
-from _common import NOISE_TOOLS, TURN_FILE, read_payload
+from _common import NOISE_TOOLS, latest_turn_file, read_payload
 
 
 def main() -> None:
@@ -11,9 +11,10 @@ def main() -> None:
     tool = payload.get("tool_name", "")
     if not tool or tool in NOISE_TOOLS:
         return
-    if not TURN_FILE.exists():
+    turn = latest_turn_file()
+    if turn is None:
         return
-    with TURN_FILE.open("a", encoding="utf-8") as f:
+    with turn.open("a", encoding="utf-8") as f:
         f.write(f"TOOL: {tool}\n")
 
 
