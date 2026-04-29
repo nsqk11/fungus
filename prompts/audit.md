@@ -1,0 +1,168 @@
+# Audit
+
+Fungus observes its own tool calls.
+
+Every tool invocation is recorded to a local SQLite store. When the
+same tool fails repeatedly within a single turn, the pipeline injects
+a reminder into the agent's next context so the agent notices the
+pattern and changes approach.
+
+The agent does not manage audit. There is no slash command, no
+skill, no user-facing knob. Audit runs silently from the hook
+router.
+
+## What this means for the agent
+
+Audit is a property of Fungus, not a tool it uses. The agent does
+not write to the audit store, does not query it, and does not have
+its existence surfaced in the system prompt. Its only contact with
+the pipeline is the `<audit-reminder>` tag that appears in context
+when a consecutive-failure threshold is crossed.
+
+When that tag appears, treat it like any other reminder: the fact
+that it is visible means the pipeline judged the situation worth
+flagging. Respond by changing approach, not by retrying the same
+call.
+
+## How the property works
+
+Audit is implemented as four hooks plus a read-only query CLI. The
+hooks run synchronously inside the agent process via the router.
+
+```
+userPromptSubmit ──→ set_turn.py       ──→ mint turn_id, clear markers
+preToolUse       ──→ record_pre.py     ──→ stash pending-<pid>-<seq>.json
+                                       ──→ emit <audit-reminder> if streak ≥ 3
+postToolUse      ──→ record_post.py    ──→ consume pending, insert row
+                                       (maintainer only)
+                 ──→ query.py          ──→ read-only CLI over audit.db
+```
+
+The pipeline is split across pre/post to measure duration: pre
+records `started_at`, post computes `duration_ms = now - started_at`
+and writes a single final row.
+
+### Components
+
+**`hooks/audit/_db.py`** — shared module imported by the other
+scripts. Owns the SQLite schema, path resolution, turn-id minting,
+pending pre→post handoff on disk, input summarization, and the
+consecutive-failure counter that drives reminders. Filename starts
+with an underscore so `router.py` skips it during hook dispatch.
+
+**`hooks/audit/set_turn.py`** — `userPromptSubmit`: generates a
+fresh turn id (`YYYYMMDDTHHMMSSZ`), writes it to
+`data/audit/current-turn.txt`, and clears any stale
+`reminded-*.flag` markers from the previous turn.
+
+**`hooks/audit/record_pre.py`** — `preToolUse`: reads the hook
+payload, computes a compact `input_summary` (basenames for path
+keys, `<redacted>` for credential-looking keys, truncated to 200
+chars), and writes `pending-<pid>-<seq>.json` containing the
+started_at timestamp, turn id, tool name, and input summary. If
+the same tool has failed three consecutive times in the current
+turn and no reminder has been emitted yet, prints an
+`<audit-reminder>` block to stdout for the router to forward into
+context.
+
+**`hooks/audit/record_post.py`** — `postToolUse`: reads the hook
+payload, finds the most recent matching `pending-<pid>-*.json`
+for this tool, computes `duration_ms`, and inserts a single row
+into `audit.db` with turn id, tool, success, error, duration,
+input summary, and start timestamp. The pending file is deleted
+after consumption.
+
+**`hooks/audit/query.py`** — human-facing CLI over `audit.db`.
+Not invoked by the agent. Subcommands: `stats` (per-tool
+totals and failure rate), `top` (most-used tools), `failures`
+(recent failures with input summary), `turn <id>` (full timeline
+for one turn), `recent` (recent turns with counts), `slow`
+(slowest calls), `pattern` (repeated failure-after-tool pairs),
+`prune --days N` (delete rows older than N days; dry-run by
+default).
+
+### Runtime files
+
+```
+$FUNGUS_ROOT/data/
+├── audit.db                         # SQLite store
+└── audit/
+    ├── current-turn.txt             # turn id of the in-flight turn
+    ├── pending-<pid>-<seq>.json     # pre-hook handoff to post-hook
+    ├── counter-<pid>.txt            # per-process sequence counter
+    └── reminded-<turn>-<tool>.flag  # de-dup marker for Layer-1 reminders
+```
+
+All files under `data/audit/` are transient. They are not indexed,
+not archived, and safe to delete between sessions. The pending
+files are consumed by post; orphan pending files from crashed
+tool calls accumulate harmlessly and can be removed manually.
+
+### Schema
+
+```sql
+CREATE TABLE audit (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp       TEXT NOT NULL,   -- row-insert time, UTC ISO-8601
+    turn_id         TEXT,            -- joins with memory's turn files
+    tool            TEXT NOT NULL,
+    success         INTEGER NOT NULL,
+    error           TEXT DEFAULT '',
+    duration_ms     INTEGER,         -- post - pre, NULL if pre was missed
+    input_summary   TEXT DEFAULT '', -- redacted, length-capped
+    started_at      TEXT             -- pre-hook timestamp, UTC ISO-8601
+);
+```
+
+`turn_id` is the join key between audit rows and memory's turn
+files. `turn_id` format matches the compact timestamp format
+generated by `set_turn.py`; it does not share format with memory's
+nanosecond `turn-<ns>.txt` files, but the two pipelines are meant
+to be correlated by time range when needed, not by identity.
+
+## Design decisions
+
+**Audit is a property, not a skill.** There is no `SKILL.md`, no
+description to match, no user-facing trigger. Audit is part of
+what Fungus is, like the router or the system prompt. The agent
+is deliberately not told it is being observed; what it sees is
+only the consequence — a reminder when behavior drifts.
+
+**Pre/post split for duration and intervention.** A single
+postToolUse hook could record the call after the fact, but it
+cannot measure duration (no start time) and cannot emit a
+reminder in time to affect the next call in the same turn.
+Splitting into pre (start time, input summary, reminder) and
+post (success, error, duration, final row) makes both of those
+work at the cost of an on-disk handoff file per call.
+
+**Pending handoff via files, not a database row.** Writing a
+half-row in pre and updating it in post would need two SQL
+operations and a row lookup. A `pending-<pid>-<seq>.json` file
+that pre creates and post consumes is simpler, survives process
+restarts between pre and post (they are separate invocations),
+and makes orphan detection trivial (the file is still there).
+
+**Layer-1 reminders, Layer-2 stats, no Layer-3 LLM analysis.**
+The pipeline emits only the immediate same-turn failure reminder
+(Layer 1) and accumulates data for offline query (Layer 2).
+Feeding history to an LLM for pattern recognition (Layer 3) is
+deferred until Layers 1–2 show data volume worth the cost.
+
+**Reminder emits once per (turn, tool) streak.** Without a
+de-dup marker, every additional failed call in the streak would
+re-emit the same reminder and the context would fill with
+duplicates. A `reminded-<turn>-<tool>.flag` file prevents that.
+Markers are cleared at `set_turn.py` time, so a new turn starts
+clean.
+
+**Input is summarized and redacted, not stored verbatim.** Full
+tool inputs can be large and may contain secrets. The summary
+captures the shape (which keys, basenames of paths) and is
+capped at 200 characters. Keys matching `token`, `password`,
+`secret`, `api_key` are replaced with `<redacted>`.
+
+**No retention policy by default.** The store grows
+append-only. A year of heavy use is well under a megabyte. The
+`query.py prune --days N` subcommand exists for users who want
+to clean up manually; it is never invoked automatically.
