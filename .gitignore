@@ -6,6 +6,7 @@
 **/data/audit.db
 **/data/audit/
 **/data/store.db
+**/data/workbenches/
 
 # Cloned knowledge bases (provisioned by install.sh)
 knowledgeBase/styleguide/

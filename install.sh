@@ -54,14 +54,14 @@ for dir in hooks prompts skills knowledgeBase; do
       for item in "$skill".* "$skill"*; do
         name="$(basename "$item")"
         case "$name" in
-          .|..|data|__pycache__|.pytest_cache) continue ;;
+          .|..|data|tests|__pycache__|.pytest_cache) continue ;;
         esac
         [ -e "$item" ] || continue
         cp -r "$item" "$dest/"
       done
-      # Remove any Python cache dirs that slipped in from nested copies
+      # Remove any test/cache dirs that slipped in from nested copies
       find "$dest" -depth -type d \
-        \( -name __pycache__ -o -name .pytest_cache \) \
+        \( -name tests -o -name __pycache__ -o -name .pytest_cache \) \
         -exec rm -rf {} + 2>/dev/null || true
       mkdir -p "$dest/data"
     done

@@ -46,9 +46,10 @@ Fungus fixes this at the agent level:
   loaded at startup; full `SKILL.md` content and references load
   only when the agent activates the skill.
 - **Batteries included** — Fungus ships with skills for
-  Atlassian API access and Office document scraping/patching, plus
-  an agent-level audit pipeline that records every tool call and
-  injects a reminder on consecutive failures.
+  Atlassian API access, Office document scraping/patching, and
+  per-project lifecycle tracking, plus an agent-level audit pipeline
+  that records every tool call and injects a reminder on consecutive
+  failures.
 
 ## Quickstart
 
@@ -159,6 +160,7 @@ The bundled skills:
 |-------|---------|
 | [`atlassian-api`](skills/atlassian-api) | PAT management and Confluence page caching |
 | [`office-toolkit`](skills/office-toolkit) | Scrape and patch docx/pptx/xlsx/pdf via XML |
+| [`project-workbench`](skills/project-workbench) | Per-project lifecycle metadata: deliverables, milestones, change log, reviews, decision notes |
 
 ## Adding a skill
 
@@ -202,7 +204,8 @@ fungus/
 │   └── agent-skills-spec.md   Skill format specification
 └── skills/                    Self-contained skills
     ├── atlassian-api/
-    └── office-toolkit/
+    ├── office-toolkit/
+    └── project-workbench/
 ```
 
 At install time `install.sh` also creates
