@@ -2,16 +2,17 @@
 """Unified scrape entry point. Routes by file extension."""
 
 import argparse
+import importlib
 import json
 import os
 import sys
 
 
 _EXTRACTORS = {
-    ".pptx": "scrape_pptx",
-    ".docx": "scrape_docx",
-    ".xlsx": "scrape_xlsx",
-    ".pdf": "scrape_pdf",
+    ".pptx": "pptx.scrape",
+    ".docx": "docx.scrape",
+    ".xlsx": "xlsx.scrape",
+    ".pdf":  "pdf.scrape",
 }
 
 
@@ -32,7 +33,7 @@ def main() -> None:
         print(f"Unsupported format: {ext}", file=sys.stderr)
         sys.exit(1)
 
-    module = __import__(module_name)
+    module = importlib.import_module(module_name)
     result = module.extract(args.input)
     out = json.dumps(result, ensure_ascii=False, indent=2)
 

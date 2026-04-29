@@ -4,12 +4,18 @@
 import argparse
 import json
 import os
+import sys
 import zipfile
+from pathlib import Path
 from typing import Any
 
 from lxml import etree
 
-from _common import parse_rels as _parse_rels
+# Add parent scripts/ dir so `_common` is importable when this file is run
+# directly or dispatched via ``scrape.py``.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _common import parse_rels as _parse_rels  # noqa: E402
 
 # ── Namespaces ─────────────────────────────────────────────────
 

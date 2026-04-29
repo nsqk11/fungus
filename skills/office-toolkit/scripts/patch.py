@@ -2,13 +2,14 @@
 """Unified patch entry point. Routes by file extension."""
 
 import argparse
+import importlib
 import json
 import os
 import sys
 
 
 _PATCHERS = {
-    ".docx": "patch_docx",
+    ".docx": "docx.patch",
 }
 
 
@@ -36,7 +37,7 @@ def main() -> None:
     with open(args.instructions, encoding="utf-8") as f:
         instructions = json.load(f)
 
-    module = __import__(module_name)
+    module = importlib.import_module(module_name)
     count = module.patch(args.input, instructions, args.output)
     out = args.output or args.input
     print(f"Applied {count} instructions → {out}")
