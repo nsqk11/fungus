@@ -46,8 +46,9 @@ Fungus fixes this at the agent level:
   loaded at startup; full `SKILL.md` content and references load
   only when the agent activates the skill.
 - **Batteries included** — Fungus ships with skills for
-  Atlassian API access, Office document scraping/patching, prompt
-  refinement, and tool usage auditing.
+  Atlassian API access and Office document scraping/patching, plus
+  an agent-level audit pipeline that records every tool call and
+  injects a reminder on consecutive failures.
 
 ## Quickstart
 
@@ -97,6 +98,28 @@ as the `fungus-memory` knowledge base.
 
 See [`prompts/memory.md`](prompts/memory.md) for the full design.
 
+### Audit
+
+Audit is a second agent-level property: every tool invocation is
+recorded to a local SQLite store, and when the same tool fails
+repeatedly within one turn the pipeline injects an
+`<audit-reminder>` into the agent's next context so it changes
+approach instead of retrying.
+
+```
+userPromptSubmit ──→ set_turn.py     ──→ mint turn_id
+preToolUse       ──→ record_pre.py   ──→ stash started_at + input summary
+                                      ──→ emit reminder if streak ≥ 3
+postToolUse      ──→ record_post.py  ──→ consume pending, insert final row
+```
+
+The store is `data/audit.db`. A maintainer-facing CLI at
+`hooks/audit/query.py` reads it (`stats`, `top`, `failures`, `turn`,
+`recent`, `slow`, `pattern`, `prune`); the agent itself is
+deliberately not told about it.
+
+See [`prompts/audit.md`](prompts/audit.md) for the full design.
+
 ### Hook routing
 
 `hooks/router.py` is the single entry point registered with Kiro.
@@ -136,7 +159,6 @@ The bundled skills:
 |-------|---------|
 | [`atlassian-api`](skills/atlassian-api) | PAT management and Confluence page caching |
 | [`office-toolkit`](skills/office-toolkit) | Scrape and patch docx/pptx/xlsx/pdf via XML |
-| [`tool-audit`](skills/tool-audit) | Record and report on tool usage |
 
 ## Adding a skill
 
@@ -159,27 +181,34 @@ fungus/
 ├── hooks/                     Agent-level hook scripts
 │   ├── router.py              Single entry point; dispatches events
 │   ├── inject_git_context.py  Inject git state before write ops
-│   └── memory/                Memory pipeline (agent property)
-│       ├── capture_*.py       Per-lifecycle-stage turn capture
-│       ├── remind_search.py   Nudge agent to search memory KB
-│       └── auto_parse.sh      Spawn async worker, archive turns
+│   ├── memory/                Memory pipeline (agent property)
+│   │   ├── capture_*.py       Per-lifecycle-stage turn capture
+│   │   ├── remind_search.py   Nudge agent to search memory KB
+│   │   └── auto_parse.sh      Spawn async worker, archive turns
+│   └── audit/                 Audit pipeline (agent property)
+│       ├── set_turn.py        Mint per-turn id on prompt submit
+│       ├── record_pre.py      Stash pending row + emit reminder
+│       ├── record_post.py     Consume pending, insert final row
+│       └── query.py           Maintainer CLI over audit.db
 ├── prompts/                   Agent-facing text
 │   ├── system-prompt.md       Agent identity and behavior rules
 │   ├── memory.md              Memory property definition
+│   ├── audit.md               Audit property definition
 │   ├── parse-criteria.md      Memory-worker operating manual
+│   ├── distill-criteria.md    Memory-distill-worker operating manual
 │   ├── coding-standards.md    Project coding conventions
 │   └── writing-standards.md   Project writing conventions
 ├── knowledgeBase/             Reference material indexed as KBs
 │   └── agent-skills-spec.md   Skill format specification
 └── skills/                    Self-contained skills
     ├── atlassian-api/
-    ├── office-toolkit/
-    └── tool-audit/
+    └── office-toolkit/
 ```
 
 At install time `install.sh` also creates
 `$KIRO_HOME/skills/fungus/data/` for runtime state
-(`long-term-memory.md`, transient `turn-*.txt` files).
+(`long-term-memory.md`, `audit.db`, transient `turn-*.txt` files,
+and the `audit/` workspace for per-turn state).
 
 ## Uninstall
 
