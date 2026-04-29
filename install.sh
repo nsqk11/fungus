@@ -17,11 +17,13 @@ for cmd in python3.12 git; do
   }
 done
 
-# Python dependencies (declared by skills that need them)
-if ! python3.12 -c "import atlassian" 2>/dev/null; then
-  echo "Installing atlassian-python-api ..."
-  python3.12 -m pip install --user atlassian-python-api
-fi
+# Python dependencies (each skill declares its own requirements.txt)
+for req in "$REPO_ROOT"/skills/*/requirements.txt; do
+  [ -f "$req" ] || continue
+  skill_name="$(basename "$(dirname "$req")")"
+  echo "Installing Python deps for $skill_name ..."
+  python3.12 -m pip install --user -q -r "$req"
+done
 
 # Remove legacy top-level dirs that v2 no longer uses
 for legacy in modules; do
