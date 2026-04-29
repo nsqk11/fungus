@@ -1,242 +1,292 @@
 #!/usr/bin/env python3.12
-"""Atlassian token management and Confluence page caching.
+"""Atlassian token management and resource access.
 
 Usage:
-    cli.py <command> [args...]
-    cli.py --help
+    cli.py fetch <url> [--format text|json|html] [--refresh]
+    cli.py page <domain> <pageId> [--format text|json|html] [--refresh]
+    cli.py issue <domain> <issueKey> [--format text|json]
+    cli.py search <query> [--domain <d>] [--title-only] [--limit N]
+    cli.py sync <domain> <spaceKey>
+    cli.py token {list|set|remove|test}
+
+For detailed help on any subcommand, run:
     cli.py <command> --help
-
-Commands:
-    token   Manage Bearer tokens per domain
-    page    Fetch and cache a Confluence page
-    lookup  Search local page cache by keyword
 """
+from __future__ import annotations
+
+import argparse
 import os
-import sqlite3
-import stat
 import sys
-from typing import NoReturn
+from pathlib import Path
+from typing import Sequence
 
-from atlassian import Confluence
+# Make sibling modules importable when this file is run as a script.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import convert
-
-_DB = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "data", "store.db"
-)
-
-HELP = {
-    "token": (
-        "Manage Bearer tokens per domain.\n\n"
-        "Usage:\n"
-        "    cli.py token list\n"
-        "    cli.py token set <domain> <pat>\n"
-        "    cli.py token remove <domain>\n"
-        "    cli.py token test <domain>\n"
-        "    cli.py token get <domain>"
-    ),
-    "page": (
-        "Fetch and cache a Confluence page.\n\n"
-        "Usage: cli.py page <domain> <pageId>\n\n"
-        "Checks remote version against local cache.\n"
-        "Only fetches full content when page has changed."
-    ),
-    "lookup": (
-        "Search local page cache by keyword.\n\n"
-        "Usage: cli.py lookup <keyword> [<domain>]\n\n"
-        "All words must match title (case-insensitive).\n"
-        "Optional domain limits search scope."
-    ),
-}
+import auth      # noqa: E402
+import confluence  # noqa: E402
+import jira      # noqa: E402
+import urls      # noqa: E402
 
 
-def _die(msg: str) -> NoReturn:
-    """Print error to stderr and exit."""
+def _die(msg: str, code: int = 1) -> int:
     print(f"ERROR: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def _connect() -> sqlite3.Connection:
-    """Return a SQLite connection with tables ready."""
-    os.makedirs(os.path.dirname(_DB), exist_ok=True)
-    conn = sqlite3.connect(_DB)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS tokens(
-            domain TEXT PRIMARY KEY, pat TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS cache(
-            domain  TEXT NOT NULL, page_id TEXT NOT NULL,
-            title   TEXT DEFAULT '', version INTEGER DEFAULT 0,
-            author  TEXT DEFAULT '', updated TEXT DEFAULT '',
-            content TEXT DEFAULT '',
-            PRIMARY KEY (domain, page_id));
-    """)
-    return conn
-
-
-def _secure_db() -> None:
-    """Restrict DB file to owner read/write."""
-    if os.path.exists(_DB):
-        os.chmod(_DB, stat.S_IRUSR | stat.S_IWUSR)
-
-
-def _get_token(domain: str) -> str:
-    """Look up PAT for *domain*, or exit."""
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT pat FROM tokens WHERE domain = ?", (domain,)
-        ).fetchone()
-    if not row:
-        _die(f"No token for {domain}")
-    return row[0]
-
-
-def _confluence(domain: str) -> Confluence:
-    """Create a Confluence object with token from SQLite."""
-    return Confluence(url=f"https://{domain}", token=_get_token(domain))
+    return code
 
 
 # --- token ---
 
-def cmd_token(args: list[str]) -> None:
-    """Manage Bearer tokens per domain."""
-    sub = args[0] if args else ""
-    if sub == "list":
-        with _connect() as conn:
-            for row in conn.execute("SELECT domain FROM tokens"):
-                print(row[0])
-    elif sub == "set":
-        if len(args) < 3:
-            _die("Usage: token set <domain> <pat>")
-        with _connect() as conn:
-            conn.execute(
-                "INSERT INTO tokens(domain, pat) VALUES(?, ?)"
-                " ON CONFLICT(domain) DO UPDATE SET pat = excluded.pat",
-                (args[1], args[2]),
+
+def _cmd_token_list(_args: argparse.Namespace) -> int:
+    rows = auth.list_tokens()
+    if not rows:
+        print("(no tokens stored)")
+        return 0
+    width = max(len(r.domain) for r in rows)
+    print(f"{'DOMAIN':<{width}}  STATUS      LAST_TESTED")
+    for r in rows:
+        print(
+            f"{r.domain:<{width}}  "
+            f"{(r.status or 'unknown'):<10}  "
+            f"{r.last_tested or '-'}"
+        )
+    return 0
+
+
+def _cmd_token_set(args: argparse.Namespace) -> int:
+    auth.set_token(args.domain, args.pat)
+    print(f"Token stored for {auth.normalise_domain(args.domain)}")
+    return 0
+
+
+def _cmd_token_remove(args: argparse.Namespace) -> int:
+    domain = auth.normalise_domain(args.domain)
+    if auth.remove_token(args.domain):
+        print(f"Removed token for {domain}")
+        return 0
+    return _die(f"No token stored for {domain}")
+
+
+def _cmd_token_test(args: argparse.Namespace) -> int:
+    try:
+        status = auth.test_token(args.domain)
+    except KeyError as exc:
+        return _die(str(exc))
+    domain = auth.normalise_domain(args.domain)
+    print(f"{domain}: {status}")
+    return 0 if status == "ok" else 1
+
+
+# --- fetch / page / issue ---
+
+
+def _print_page(page: confluence.Page, fmt: str) -> None:
+    if fmt == "json":
+        print(page.as_json())
+    elif fmt == "html":
+        print(page.body_html)
+    else:
+        print(page.as_text())
+
+
+def _print_issue(issue: jira.JiraIssue, fmt: str, *, full: bool = False) -> None:
+    if fmt == "json":
+        print(issue.as_json())
+    else:
+        print(issue.as_text(max_comments=None if full else 10))
+
+
+def _cmd_fetch(args: argparse.Namespace) -> int:
+    resource = urls.classify(args.url)
+    if resource.kind == "confluence_page":
+        if not resource.page_id:
+            return _die(
+                f"Could not extract a page id from {args.url!r}; "
+                "use 'page <domain> <pageId>' directly."
             )
-        _secure_db()
-        print(f"Token set for {args[1]}")
-    elif sub == "remove":
-        if len(args) < 2:
-            _die("Usage: token remove <domain>")
-        with _connect() as conn:
-            conn.execute("DELETE FROM tokens WHERE domain = ?", (args[1],))
-        print(f"Removed token for {args[1]}")
-    elif sub == "test":
-        if len(args) < 2:
-            _die("Usage: token test <domain>")
-        try:
-            c = _confluence(args[1])
-            c.get_all_spaces(limit=1)
-            print(f"OK — token for {args[1]} is valid")
-        except Exception as e:
-            if "401" in str(e):
-                print(f"EXPIRED — token for {args[1]} needs renewal")
-            else:
-                _die(f"FAILED — {e}")
-    elif sub == "get":
-        if len(args) < 2:
-            _die("Usage: token get <domain>")
-        print(_get_token(args[1]))
-    else:
-        _die("Usage: token {list|set|remove|test|get} [args]")
+        if not resource.host:
+            return _die(f"URL has no host: {args.url!r}")
+        page = confluence.fetch_page(
+            resource.host, resource.page_id, refresh=args.refresh
+        )
+        _print_page(page, args.format)
+        return 0
+    if resource.kind == "jira_issue":
+        if not resource.issue_key or not resource.host:
+            return _die(f"Malformed Jira URL: {args.url!r}")
+        if args.format == "html":
+            return _die("--format html is not supported for Jira issues")
+        issue = jira.fetch_issue(resource.host, resource.issue_key)
+        _print_issue(
+            issue,
+            args.format if args.format != "html" else "text",
+            full=getattr(args, "full", False),
+        )
+        return 0
+    return _die(
+        f"Unrecognised Atlassian URL: {args.url!r}. "
+        "Supported path patterns: Confluence /pages/, /display/, /wiki/; "
+        "Jira /browse/<KEY>-<N>."
+    )
 
 
-# --- page ---
-
-def cmd_page(domain: str, page_id: str) -> None:
-    """Fetch page with cache-aware incremental update."""
-    c = _confluence(domain)
-    meta = c.get_page_by_id(page_id, expand="version")
-    title = meta.get("title", "")
-    ver = meta.get("version", {})
-    version = ver.get("number", 0)
-    author = ver.get("by", {}).get("displayName", "")
-    updated = ver.get("when", "")
-
-    with _connect() as conn:
-        cached = conn.execute(
-            "SELECT updated, content FROM cache"
-            " WHERE domain = ? AND page_id = ?",
-            (domain, page_id),
-        ).fetchone()
-
-    if cached and cached[0] == updated and cached[1]:
-        text = cached[1]
-    else:
-        full = c.get_page_by_id(page_id, expand="body.storage,version")
-        body_html = full.get("body", {}).get("storage", {}).get("value", "")
-        text = convert.html2text(body_html, domain, page_id)
-        with _connect() as conn:
-            conn.execute(
-                "INSERT INTO cache(domain, page_id, title, version,"
-                " author, updated, content) VALUES(?, ?, ?, ?, ?, ?, ?)"
-                " ON CONFLICT(domain, page_id) DO UPDATE SET"
-                " title=excluded.title, version=excluded.version,"
-                " author=excluded.author, updated=excluded.updated,"
-                " content=excluded.content",
-                (domain, page_id, title, version, author, updated, text),
-            )
-
-    print(f"title: {title}")
-    print(f"version: {version}")
-    print(f"author: {author}")
-    print(f"updated: {updated}")
-    print("=" * 60)
-    print(text)
+def _cmd_page(args: argparse.Namespace) -> int:
+    page = confluence.fetch_page(args.domain, args.page_id, refresh=args.refresh)
+    _print_page(page, args.format)
+    return 0
 
 
-# --- lookup ---
-
-def cmd_lookup(keyword: str, domain: str | None = None) -> None:
-    """Search local page cache by keyword."""
-    words = keyword.lower().split()
-    with _connect() as conn:
-        if domain:
-            rows = conn.execute(
-                "SELECT page_id, title FROM cache WHERE domain = ?",
-                (domain,),
-            ).fetchall()
-        else:
-            rows = conn.execute("SELECT page_id, title FROM cache").fetchall()
-    for page_id, title in rows:
-        if all(w in title.lower() for w in words):
-            print(f"{page_id}  {title}")
+def _cmd_issue(args: argparse.Namespace) -> int:
+    issue = jira.fetch_issue(args.domain, args.issue_key)
+    _print_issue(issue, args.format, full=args.full)
+    return 0
 
 
-# --- CLI ---
+def _cmd_search(args: argparse.Namespace) -> int:
+    results = confluence.search_pages(
+        args.query,
+        domain=args.domain,
+        title_only=args.title_only,
+        limit=args.limit,
+    )
+    if not results:
+        print("(no results)")
+        return 0
+    for p in results:
+        print(f"{p.domain}  {p.page_id:>10}  {p.title}")
+    return 0
 
-def _extract_domain(s: str) -> str:
-    """Extract domain from URL or bare domain string."""
-    if s.startswith("http://") or s.startswith("https://"):
-        return s.split("/")[2]
-    return s
+
+def _cmd_sync(args: argparse.Namespace) -> int:
+    count = confluence.sync_space(args.domain, args.space_key)
+    print(f"Synced {count} page(s) from space {args.space_key} on {args.domain}")
+    return 0
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1] == "--help":
-        print(__doc__.strip())
-        sys.exit(0)
+# --- parser ---
 
-    cmd = sys.argv[1]
-    rest = sys.argv[2:]
 
-    if "--help" in rest:
-        print(HELP.get(cmd, __doc__.strip()))
-        sys.exit(0)
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="atlassian-api",
+        description=(
+            "Atlassian token manager, Confluence page cache, and Jira"
+            " issue fetcher. For writes, JQL, CQL, and other operations,"
+            " write Python against atlassian-python-api directly."
+        ),
+    )
+    sub = p.add_subparsers(dest="command", required=True)
 
-    if cmd == "token":
-        cmd_token(rest)
-    elif cmd == "page":
-        if len(rest) < 2:
-            print(HELP["page"])
-            sys.exit(0)
-        cmd_page(_extract_domain(rest[0]), rest[1])
-    elif cmd == "lookup":
-        if not rest:
-            print(HELP["lookup"])
-            sys.exit(0)
-        domain = _extract_domain(rest[1]) if len(rest) > 1 else None
-        cmd_lookup(rest[0], domain)
-    else:
-        _die(f"Unknown command: {cmd}")
+    # fetch
+    f = sub.add_parser(
+        "fetch",
+        help="Fetch a Confluence page or Jira issue by URL",
+        description=(
+            "Classify an Atlassian URL and dispatch to the right handler."
+            " Confluence pages go through the cache; Jira issues are"
+            " fetched live every time."
+        ),
+    )
+    f.add_argument("url")
+    f.add_argument(
+        "--format",
+        choices=["text", "json", "html"],
+        default="text",
+        help="Output format (html is Confluence-only)",
+    )
+    f.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Force re-fetch Confluence body even if the cache looks fresh",
+    )
+    f.add_argument(
+        "--full",
+        action="store_true",
+        help="Print all Jira comments (default shows only the last 10)",
+    )
+    f.set_defaults(func=_cmd_fetch)
+
+    # page
+    pg = sub.add_parser(
+        "page",
+        help="Fetch a Confluence page by (domain, pageId)",
+    )
+    pg.add_argument("domain")
+    pg.add_argument("page_id")
+    pg.add_argument(
+        "--format", choices=["text", "json", "html"], default="text"
+    )
+    pg.add_argument("--refresh", action="store_true")
+    pg.set_defaults(func=_cmd_page)
+
+    # issue
+    iss = sub.add_parser(
+        "issue",
+        help="Fetch a Jira issue by (domain, issueKey) — no caching",
+    )
+    iss.add_argument("domain")
+    iss.add_argument("issue_key")
+    iss.add_argument("--format", choices=["text", "json"], default="text")
+    iss.add_argument(
+        "--full",
+        action="store_true",
+        help="Print all comments (default shows only the last 10)",
+    )
+    iss.set_defaults(func=_cmd_issue)
+
+    # search
+    s = sub.add_parser(
+        "search",
+        help="Full-text search over the cached Confluence pages",
+    )
+    s.add_argument("query")
+    s.add_argument("--domain", help="Limit search to one domain")
+    s.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Search titles only (skip body text)",
+    )
+    s.add_argument("--limit", type=int, default=50)
+    s.set_defaults(func=_cmd_search)
+
+    # sync
+    sy = sub.add_parser(
+        "sync",
+        help="Prime title index for a Confluence space",
+    )
+    sy.add_argument("domain")
+    sy.add_argument("space_key")
+    sy.set_defaults(func=_cmd_sync)
+
+    # token
+    tok = sub.add_parser("token", help="Manage Personal Access Tokens")
+    tsub = tok.add_subparsers(dest="token_cmd", required=True)
+
+    tsub.add_parser("list", help="List stored tokens").set_defaults(
+        func=_cmd_token_list
+    )
+
+    t_set = tsub.add_parser("set", help="Store or update a PAT")
+    t_set.add_argument("domain")
+    t_set.add_argument("pat")
+    t_set.set_defaults(func=_cmd_token_set)
+
+    t_rm = tsub.add_parser("remove", help="Delete a stored PAT")
+    t_rm.add_argument("domain")
+    t_rm.set_defaults(func=_cmd_token_remove)
+
+    t_test = tsub.add_parser("test", help="Probe a PAT against the server")
+    t_test.add_argument("domain")
+    t_test.set_defaults(func=_cmd_token_test)
+
+    return p
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

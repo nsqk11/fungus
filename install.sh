@@ -52,16 +52,23 @@ for dir in hooks prompts skills knowledgeBase; do
       for item in "$skill".* "$skill"*; do
         name="$(basename "$item")"
         case "$name" in
-          .|..|data) continue ;;
+          .|..|data|__pycache__|.pytest_cache) continue ;;
         esac
         [ -e "$item" ] || continue
         cp -r "$item" "$dest/"
       done
+      # Remove any Python cache dirs that slipped in from nested copies
+      find "$dest" -depth -type d \
+        \( -name __pycache__ -o -name .pytest_cache \) \
+        -exec rm -rf {} + 2>/dev/null || true
       mkdir -p "$dest/data"
     done
   else
     rm -rf "$INSTALL_DIR/$dir"
     cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
+    find "$INSTALL_DIR/$dir" -depth -type d \
+      \( -name __pycache__ -o -name .pytest_cache \) \
+      -exec rm -rf {} + 2>/dev/null || true
   fi
 done
 
