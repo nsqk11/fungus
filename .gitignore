@@ -14,6 +14,7 @@ knowledgeBase/design-patterns-for-humans/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # Editor artifacts
 .vscode/
