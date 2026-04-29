@@ -4,6 +4,7 @@
 **/data/long-term-memory.md
 **/data/turn-*.txt
 **/data/audit.db
+**/data/audit/
 **/data/store.db
 
 # Cloned knowledge bases (provisioned by install.sh)
