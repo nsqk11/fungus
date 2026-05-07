@@ -136,15 +136,22 @@ def pending_path(pid: int, seq: int) -> Path:
 
 
 def next_pending_seq() -> int:
-    """Next counter within the current process for disambiguating calls."""
+    """Atomically increment a single seq.txt file and return the new value."""
+    import fcntl
+
     d = pending_dir()
     d.mkdir(parents=True, exist_ok=True)
-    counter = d / f"counter-{os.getpid()}.txt"
+    seq_file = str(d / "seq.txt")
+    fd = os.open(seq_file, os.O_RDWR | os.O_CREAT)
     try:
-        value = int(counter.read_text()) + 1
-    except (FileNotFoundError, ValueError):
-        value = 1
-    counter.write_text(str(value))
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        raw = os.read(fd, 32)
+        value = int(raw) + 1 if raw.strip() else 1
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.ftruncate(fd, 0)
+        os.write(fd, str(value).encode())
+    finally:
+        os.close(fd)
     return value
 
 
@@ -298,6 +305,22 @@ def clear_reminder_markers() -> None:
     for p in d.glob("reminded-*.flag"):
         try:
             p.unlink()
+        except OSError:
+            pass
+
+
+def cleanup_stale_pending(max_age_hours: int = 24) -> None:
+    """Remove pending-*.json files older than *max_age_hours*."""
+    import time
+
+    d = audit_dir()
+    if not d.is_dir():
+        return
+    cutoff = time.time() - max_age_hours * 3600
+    for p in d.glob("pending-*.json"):
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
         except OSError:
             pass
 

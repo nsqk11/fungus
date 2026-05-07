@@ -99,10 +99,15 @@ for f in "$DATA"/turn-*.txt; do
   fi
 
   # If the file still starts with "PROMPT:", the worker hasn't
-  # finished yet. Leave it for the next stop.
+  # finished yet — unless it's older than 24h, in which case the
+  # worker is assumed dead and the file is discarded.
   first="$(head -n 1 "$f")"
   case "$first" in
-    PROMPT:*) continue ;;
+    PROMPT:*)
+      if [ "$(find "$f" -mmin +1440 2>/dev/null)" ]; then
+        command rm -f -- "$f"
+      fi
+      continue ;;
   esac
 
   # Otherwise the worker has rewritten it into a memory entry.

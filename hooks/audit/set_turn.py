@@ -29,6 +29,7 @@ def main() -> None:
     turn_id = _db.new_turn_id()
     _db.write_turn_id(turn_id)
     _db.clear_reminder_markers()
+    _db.cleanup_stale_pending()
 
 
 if __name__ == "__main__":
