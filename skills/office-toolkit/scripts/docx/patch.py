@@ -503,12 +503,12 @@ def _op_add_after(
 ) -> None:
     """Insert a new paragraph after body[idx]."""
     ref = ctx.body[idx]
-    clone_from = instr.get("clone_style_from")
-    if clone_from is not None:
-        new_p = deepcopy(ctx.body[clone_from])
-        _clear_runs(new_p)
-    else:
-        new_p = _make(_P)
+    cached = instr.get("_cached_clone_el")
+    new_p = _make(_P)
+    if cached is not None and cached.tag == _P:
+        src_ppr = cached.find(_PPR)
+        if src_ppr is not None:
+            new_p.append(deepcopy(src_ppr))
     _inject_runs(new_p, instr["runs"], ctx)
     ref.addnext(new_p)
 
@@ -521,7 +521,9 @@ def _op_add_table_after(
     new_tbl = _make(_TBL)
     clone_from = instr.get("clone_style_from")
     if clone_from is not None:
-        src_tpr = ctx.body[clone_from].find(_TBLPR)
+        cached = instr.get("_cached_clone_el")
+        src = cached if cached is not None else ctx.body[clone_from]
+        src_tpr = src.find(_TBLPR)
         if src_tpr is not None:
             new_tbl.append(deepcopy(src_tpr))
     rows = instr["rows"]
@@ -639,6 +641,13 @@ _OPS_STRUCTURAL = {
 
 def _apply(ctx: DocxContext, instructions: list[Instr]) -> int:
     """Apply instructions in safe order. Return count."""
+    # Pre-cache clone_style_from elements before any modifications,
+    # so structural ops get the original (unmodified) style source.
+    for instr in instructions:
+        clone_from = instr.get("clone_style_from")
+        if clone_from is not None:
+            instr["_cached_clone_el"] = deepcopy(ctx.body[clone_from])
+
     # Phase 1: modifications (body length unchanged).
     mods = [i for i in instructions if i["op"] in _OPS_MODIFY]
     for instr in mods:
