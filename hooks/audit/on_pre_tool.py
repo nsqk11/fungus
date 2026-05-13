@@ -3,8 +3,8 @@
 # @priority 20
 # @description Emit audit-reminder on consecutive tool failures.
 
-import os
 import sys
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "memory"))
@@ -49,18 +49,12 @@ def main() -> None:
             break
 
     if streak >= FAILURE_THRESHOLD:
-        msg = (
+        sys.stdout.write(
             "<audit-reminder>\n"
             f'The tool "{tool}" has failed {streak} consecutive times in '
             "this turn. Consider a different approach.\n"
-            "</audit-reminder>"
+            "</audit-reminder>\n"
         )
-        out = os.environ.get("AGENT_CONTEXT_OUT")
-        if out:
-            with open(out, "w") as f:
-                f.write(msg)
-        else:
-            sys.stdout.write(msg + "\n")
 
 
 if __name__ == "__main__":
