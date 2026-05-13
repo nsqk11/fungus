@@ -1,9 +1,24 @@
 #!/usr/bin/env python3.12
 # @hook preToolUse
 # @priority 10
-# @description Append TOOL line to the current turn file (skipping noise tools).
+# @description Append tool name to current turn's tools column.
 
-from _common import NOISE_TOOLS, latest_turn_file, read_payload
+import json
+import sys
+
+from _db import NOISE_TOOLS, SESSION_ID, get_conn
+
+
+def read_payload() -> dict:
+    if sys.stdin.isatty():
+        return {}
+    raw = sys.stdin.read()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
 
 
 def main() -> None:
@@ -11,11 +26,17 @@ def main() -> None:
     tool = payload.get("tool_name", "")
     if not tool or tool in NOISE_TOOLS:
         return
-    turn = latest_turn_file()
-    if turn is None:
-        return
-    with turn.open("a", encoding="utf-8") as f:
-        f.write(f"TOOL: {tool}\n")
+    conn = get_conn()
+    conn.execute(
+        """UPDATE turns
+           SET tools = CASE WHEN tools = '' THEN ? ELSE tools || char(10) || ? END,
+               status = 'preToolUse',
+               updated_at = strftime('%Y-%m-%dT%H:%M:%f','now')
+           WHERE id = (SELECT MAX(id) FROM turns WHERE session_id = ?)""",
+        (f"TOOL: {tool}", f"TOOL: {tool}", SESSION_ID),
+    )
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":

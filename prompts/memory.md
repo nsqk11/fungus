@@ -23,149 +23,75 @@ Do not write to the memory store directly.
 
 ## How the property works
 
-Memory is implemented as an asynchronous pipeline that runs
-outside your turn. You do not invoke it; it observes.
+Memory is implemented as an asynchronous pipeline backed by SQLite.
+You do not invoke it; it observes.
 
 ```
-userPromptSubmit ──→ capture_prompt.py ──→ turn-<sid>-<ts>.txt (new file)
-preToolUse       ──→ capture_tool.py   ──→ turn-<sid>-<ts>.txt (tool appended)
-postToolUse      ──→ capture_error.py  ──→ turn-<sid>-<ts>.txt (error appended)
-stop             ──→ auto_parse.sh     ──→ response appended
+userPromptSubmit ──→ capture_prompt.py ──→ INSERT turn (status='userPromptSubmit')
+preToolUse       ──→ capture_tool.py   ──→ UPDATE tools column (status='preToolUse')
+postToolUse      ──→ capture_error.py  ──→ UPDATE tools column with error (status='postToolUse')
+stop             ──→ stop.py           ──→ UPDATE response (status='stop')
                                        ──→ extract worker spawned (async)
-                                       ──→ older turn files archived
-                                       ──→ distill worker spawned when
-                                           long-term-memory.md exceeds 200
-                                           entries (async)
-                                       ──→ pending distill applied from a
-                                           prior turn
 ```
 
-Each turn has its own file, keyed by session ID (`KIRO_SESSION_ID`)
-and a nanosecond timestamp. Multiple sessions can run concurrently
-without interfering — each session only reads and writes its own
-turn files. The shared `long-term-memory.md` is protected by
-`flock` during writes.
+All state lives in `data/memory.db` (SQLite, WAL mode). Multiple
+sessions can run concurrently without interfering — SQLite handles
+locking internally.
 
-After the stop hook launches the extract worker, control returns
+After the stop hook spawns the extract worker, control returns
 to the user immediately — the worker finishes on its own timeline.
 
-The extract worker reads the turn file and rewrites it in place:
-either a Markdown memory entry (keep) or an empty file (drop).
-On the next stop, any turn file that is no longer `PROMPT:`-prefixed
-is archived into `long-term-memory.md` and removed.
-
-The distill worker reads `long-term-memory.md` and writes a
-consolidated replacement to `memory-<ts>.md`. The next stop merges
-that replacement with any entries appended since the worker took
-its snapshot, atomically replaces the main file, and cleans up.
+The extract worker reads all turns with status='stop', judges each
+one per `parse-criteria.md`, and calls `extract.py keep` or
+`extract.py drop`. Kept entries are inserted into the `memories`
+table and appended to `long-term-memory.md` for KB indexing.
 
 ### Components
 
+**`hooks/memory/_db.py`** — SQLite schema and connection helper.
+Not a hook (underscore prefix). Defines `turns` and `memories`
+tables, WAL mode, and `get_conn()`.
+
 **`hooks/memory/capture_prompt.py`** — `userPromptSubmit`:
-creates a new `turn-<session_id>-<nanoseconds>.txt` and writes the
-`PROMPT:` line. A fresh file per turn means the pipeline tolerates
-concurrent turns and delayed worker completions without
-overwriting anything. The session ID prefix ensures multiple
-concurrent Kiro instances never collide on turn files.
+INSERT a new row into `turns` with the prompt text and
+status='userPromptSubmit'.
 
-**`hooks/memory/capture_tool.py`** — `preToolUse`: finds the most
-recent turn file (lexicographic max over `turn-*.txt`) and
-appends `TOOL: <name>`. Skips noise tools such as `fs_read`,
-`grep`, `glob`.
+**`hooks/memory/capture_tool.py`** — `preToolUse`: UPDATE the
+current session's latest turn, appending the tool name to the
+`tools` column. Skips noise tools (fs_read, grep, glob).
 
-**`hooks/memory/capture_error.py`** — `postToolUse`: finds the
-most recent turn file and appends `ERROR: <text>` when
-`tool_response.success` is false.
+**`hooks/memory/capture_error.py`** — `postToolUse`: UPDATE the
+current session's latest turn, appending error text to `tools`
+when `tool_response.success` is false.
 
 **`hooks/memory/remind_search.py`** — `userPromptSubmit`: emits a
 `<memory-reminder>` context entry nudging the agent to search
 `fungus-memory` when the prompt is ambiguous.
 
-**`hooks/memory/_common.py`** — shared helpers: `new_turn_file()`
-creates a session-scoped timestamped turn file,
-`latest_turn_file()` returns the current session's most recent
-turn (if any). Uses `KIRO_SESSION_ID` for isolation. Underscore
-prefix makes the router skip it.
+**`hooks/memory/stop.py`** — `stop`: UPDATE the turn with the
+assistant response and status='stop', then spawn a detached
+extract worker.
 
-**`hooks/memory/auto_parse.sh`** — registered for `stop`:
+**`hooks/memory/extract.py`** — CLI tool used by the extract
+worker:
 
-1. **Apply pending distill.** If a previous stop spawned a
-   distill worker that finished, apply its result now: read
-   `memory-<ts>.md` (the distilled replacement) and
-   `memory-<ts>.snapshot.md` (the main file as the worker saw
-   it), append any bytes written to `long-term-memory.md` beyond
-   the snapshot's length, atomically replace the main file, and
-   remove both files. Because `long-term-memory.md` is
-   append-only, the post-snapshot tail is exactly the bytes
-   beyond the snapshot's size, so no entries are lost even
-   though the worker ran asynchronously.
+```bash
+python3.12 extract.py list                              # show status='stop' turns
+python3.12 extract.py keep <id> "<summary>" "<detail>" "<tags>"
+python3.12 extract.py drop <id>
+```
 
-2. **Finalize the current turn.** Find the newest
-   `turn-*.txt`. If its first line is `PROMPT:`, append
-   `RESPONSE: <assistant_response>` and spawn a detached
-   `kiro-cli chat --no-interactive` extract worker whose prompt
-   is `prompts/parse-criteria.md` plus the turn file's path. The
-   worker reads, judges, and rewrites the file in place.
-
-3. **Archive finished turns.** For every *other* `turn-*.txt`:
-   - If the file is empty, remove it (the worker chose drop).
-   - If the first line still starts with `PROMPT:`, skip it (the
-     worker has not finished yet; it will be picked up on a
-     future stop).
-   - Otherwise the file is a finished memory entry: append it to
-     `long-term-memory.md`, then remove it.
-
-4. **Trigger distill.** Count entries (`## ` lines) in
-   `long-term-memory.md`. If the count exceeds 200 and no
-   `memory-*.snapshot.md` is already pending, snapshot the main
-   file to `memory-<ts>.snapshot.md` and spawn a detached
-   distill worker whose prompt is `prompts/distill-criteria.md`
-   plus the snapshot path (input) and `memory-<ts>.md` (output).
-   The worker reads the snapshot and writes a consolidated
-   replacement; step 1 on a future stop applies it.
-
-5. Exit immediately. Both workers keep running on their own.
-
-**Extract worker** — a headless `kiro-cli chat --no-interactive`
-invocation using the default agent. It needs `fs_read` (to read
-the turn file) and `fs_write` (to overwrite it). The default
-agent must have both tools enabled; without them the worker
-cannot rewrite the turn file and the pipeline stalls. The worker
-prompt is `parse-criteria.md` plus the turn file's path; the
-worker reads the turn, decides keep or drop, and rewrites the
-file.
-
-Having the extract worker rewrite the turn file in place means:
-- No separate output file to coordinate.
-- The file's content is the pipeline's status marker:
-  `PROMPT:...` means "not yet processed", anything else means
-  "worker finished".
-- `kiro-cli`'s unavoidable ANSI decoration on stdout is ignored
-  entirely.
-
-**Distill worker** — another headless `kiro-cli chat
---no-interactive` invocation. Its prompt is
-`distill-criteria.md` plus two paths: the snapshot of
-`long-term-memory.md` to read, and the output path
-`memory-<ts>.md` to write. The worker reads the full snapshot,
-decides merge / supersede / keep / drop across all entries, and
-writes a consolidated replacement. It never touches the main
-file directly; the apply step in step 1 of `auto_parse.sh` is
-the only place the main file is replaced.
+Uses optimistic locking (claim via UPDATE WHERE status='stop')
+so multiple workers never process the same turn twice.
 
 **`prompts/parse-criteria.md`** — the extract worker's
-operating manual: what to keep, what to drop, and the turn-file
-output format. Loaded into the worker prompt verbatim.
+operating manual: what to keep, what to drop, and the entry
+format. Loaded into the worker prompt verbatim.
 
-**`prompts/distill-criteria.md`** — the distill worker's
-operating manual: merge / supersede / keep / drop rules across
-the whole store, plus the replacement-file output format.
-Loaded into the worker prompt verbatim.
-
-**`data/long-term-memory.md`** — append-only Markdown store,
+**`data/long-term-memory.md`** — append-only Markdown export,
 indexed as the `fungus-memory` knowledge base with `autoUpdate:
-true`. Not committed to the repo; `install.sh` creates an empty
-file on first install.
+true`. This is a materialized view for KB indexing, not the
+source of truth.
 
 Entry format (defined by `parse-criteria.md`):
 
@@ -177,94 +103,71 @@ Date: YYYY-MM-DD | Tags: tag1, tag2
 <optional 1-3 sentence detail>
 ```
 
+### Database schema
+
+```sql
+CREATE TABLE turns (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    prompt TEXT,
+    tools TEXT DEFAULT '',
+    response TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE memories (
+    id INTEGER PRIMARY KEY,
+    summary TEXT NOT NULL,
+    detail TEXT,
+    tags TEXT,
+    created_at TEXT NOT NULL,
+    source_turn_id INTEGER REFERENCES turns(id)
+);
+```
+
+### Status lifecycle
+
+```
+userPromptSubmit → preToolUse → postToolUse → stop → extracting → archived/dropped
+```
+
+Each hook updates status to its own name. The extract worker
+claims turns by setting status='extracting' (optimistic lock),
+then finalizes to 'archived' or 'dropped'.
+
 ### Runtime files
 
 ```
 $KIRO_HOME/skills/fungus/data/
-├── long-term-memory.md              # long-term store, KB-indexed
-├── .memory.lock                     # flock file for concurrent writes
-├── turn-<session_id>-<ns>.txt       # one per in-flight or pending turn
-├── memory-<ts>.snapshot.md          # distill: snapshot taken when worker spawned
-└── memory-<ts>.md                   # distill: worker's consolidated replacement
+├── memory.db              # SQLite database (WAL mode)
+├── memory.db-wal          # WAL file (auto-managed)
+├── memory.db-shm          # shared memory (auto-managed)
+└── long-term-memory.md    # KB-indexed export
 ```
-
-Normally only the current session's turn file exists. Extra turn
-files (from the same or other sessions) mean extract workers are
-still running or crashed mid-parse. Files whose workers crashed before rewriting will be
-reclaimed on the next successful turn-end — or left to accumulate
-if the worker never succeeds on any turn.
-
-A `memory-<ts>.snapshot.md` without a matching `memory-<ts>.md`
-means a distill worker is still running or crashed before writing
-its output; the snapshot alone blocks new distill triggers until
-a `memory-<ts>.md` appears (apply succeeds and both files are
-removed) or the user removes them manually.
-
-Manual cleanup (`rm turn-*.txt` or `rm memory-*.md*`) is safe at
-any time between sessions.
 
 ## Design decisions
 
-**Asynchronous extract worker.** The extract worker takes
-several seconds per turn. Running it inline would block every
-`stop` for that long. Launching it detached keeps the user's
-`stop → next prompt` experience instant; the memory entry lands
-on the following stop.
+**SQLite over files.** Eliminates turn-file naming, flock,
+snapshot/tail merge, and file-as-state-marker complexity. WAL
+mode handles concurrent writes without manual locking.
 
-**Extract worker rewrites the turn file in place.** Using the
-same file for input and output means the pipeline needs no
-separate "output" path, no filename convention, and no
-race-prone coordination. The file's first line is the state
-marker: `PROMPT:...` → not yet processed, anything else →
-processed.
+**Per-turn extraction.** Each turn is a complete causal unit.
+Per-session extraction risks information loss from context
+dilution and unreliable session-end triggers.
 
-**Archive at stop, not at next prompt.** The stop hook already
-runs after the turn ends, with the user waiting for nothing; a
-few milliseconds of file IO there is invisible. Doing it at the
-next `userPromptSubmit` would couple archive work to the start
-of the user's next turn for no benefit.
+**Optimistic locking for extract workers.** Multiple workers
+can run safely in parallel — each claims a turn atomically
+before processing. No blocking, no starvation.
 
-**Turn file per turn, keyed by session ID and nanosecond
-timestamp.** A single file would need locking or serialization;
-concurrent sessions could clobber each other. Per-session,
-per-turn file isolation makes each turn independent and allows
-multiple Kiro instances to run safely in parallel.
+**Immediate MD export on keep.** Each `keep_turn` appends to
+`long-term-memory.md` so the KB indexes new entries without
+waiting for a batch export.
 
-**No database.** A turn file is a buffer, `long-term-memory.md`
-is the store. A SQLite lifecycle has no reason to exist once
-parse is automatic.
-
-**No pattern detection.** Keyword clustering has low practical
-value. When the user notices a recurring topic they create a
-skill directly. The knowledge base itself reveals repeated
-themes through search.
-
-**Append-only memory store with periodic distillation.**
-Per-turn writes never deduplicate — reading the full store on
-every turn would add context, latency, and complexity for little
-gain. Instead, the store grows append-only until it exceeds 200
-entries, at which point a detached distill worker consolidates
-it across all entries in one pass. Occasional duplicates between
-distillations cost less than slower per-turn parses.
-
-**Distill uses snapshot plus append-tail, not plain replace.**
-The distill worker is detached and may finish several stops
-later. In the meantime, new entries are appended to
-`long-term-memory.md`. A plain replace would overwrite them.
-Before spawning the worker, the hook copies the main file to
-`memory-<ts>.snapshot.md`. When the hook applies the worker's
-output, it takes `memory-<ts>.md` as the base and appends the
-bytes in the main file beyond the snapshot's size. Because the
-store is append-only, that byte range is exactly the entries
-written during the worker's run — no data loss, no diffing, no
-timestamps inside entries.
-
-**One pending distill at a time.** The hook spawns a new distill
-worker only when no `memory-<ts>.snapshot.md` exists. This
-prevents concurrent workers from racing over the same main file
-and simplifies the apply step to "find the one pair and use it".
-If a worker crashes and leaves an orphan snapshot, the user can
-remove `memory-*.md*` manually to unblock further triggers.
+**Status as hook name.** Using the hook event name as the
+status value makes the lifecycle self-documenting and
+debuggable via a simple SELECT.
 
 **Memory is a property, not a skill.** There is no `SKILL.md`,
 no description to match, no user-facing trigger. Memory is part

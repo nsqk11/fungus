@@ -1,9 +1,24 @@
 #!/usr/bin/env python3.12
 # @hook userPromptSubmit
 # @priority 10
-# @description Start a new turn: write PROMPT line to turn-<ts>.txt.
+# @description Insert new turn row on user prompt.
 
-from _common import MIN_PROMPT_LEN, new_turn_file, read_payload
+import json
+import sys
+
+from _db import MIN_PROMPT_LEN, SESSION_ID, get_conn
+
+
+def read_payload() -> dict:
+    if sys.stdin.isatty():
+        return {}
+    raw = sys.stdin.read()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
 
 
 def main() -> None:
@@ -11,8 +26,13 @@ def main() -> None:
     prompt = payload.get("prompt", "").strip()
     if len(prompt) < MIN_PROMPT_LEN:
         return
-    turn_file = new_turn_file()
-    turn_file.write_text(f"PROMPT: {prompt}\n", encoding="utf-8")
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO turns (session_id, prompt, status) VALUES (?, ?, 'userPromptSubmit')",
+        (SESSION_ID, prompt),
+    )
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":
