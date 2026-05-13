@@ -71,6 +71,14 @@ Run `list` first, then for each turn decide keep or drop per the criteria above.
             start_new_session=True,
         )
 
+    # Cleanup stale turns: drop 24h+ dropped or non-terminal turns
+    conn = get_conn()
+    conn.execute(
+        """DELETE FROM turns WHERE updated_at < strftime('%Y-%m-%dT%H:%M:%f','now','-1 day')
+           AND status NOT IN ('archived')"""
+    )
+    conn.commit()
+
     # Trigger distill if threshold exceeded and no distill in progress
     conn = get_conn()
     lock = conn.execute("SELECT value FROM meta WHERE key = 'distill_lock'").fetchone()
