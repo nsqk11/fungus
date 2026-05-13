@@ -55,10 +55,6 @@ def main() -> None:
             "this turn. Consider a different approach.\n"
             "</audit-reminder>"
         )
-        display = os.environ.get("AGENT_DISPLAY_OUT")
-        if display:
-            with open(display, "w") as f:
-                f.write(f"\033[33m[audit]\033[0m ⚠ {tool} failed {streak}x consecutively\n")
         out = os.environ.get("AGENT_CONTEXT_OUT")
         if out:
             with open(out, "w") as f:

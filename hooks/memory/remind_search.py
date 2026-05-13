@@ -8,7 +8,6 @@ import os
 
 def main() -> None:
     out = os.environ.get("AGENT_CONTEXT_OUT")
-    display = os.environ.get("AGENT_DISPLAY_OUT")
     msg = (
         "<memory-reminder>\n"
         "If the user's message is ambiguous or references prior "
@@ -16,9 +15,6 @@ def main() -> None:
         "knowledge base before answering.\n"
         "</memory-reminder>"
     )
-    if display:
-        with open(display, "w") as f:
-            f.write("\033[36m[memory]\033[0m remind: search fungus-memory if unsure\n")
     if out:
         with open(out, "w") as f:
             f.write(msg)
