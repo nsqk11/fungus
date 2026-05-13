@@ -27,9 +27,9 @@ Memory is implemented as an asynchronous pipeline that runs
 outside your turn. You do not invoke it; it observes.
 
 ```
-userPromptSubmit ──→ capture_prompt.py ──→ turn-<ts>.txt (new file)
-preToolUse       ──→ capture_tool.py   ──→ turn-<ts>.txt (tool appended)
-postToolUse      ──→ capture_error.py  ──→ turn-<ts>.txt (error appended)
+userPromptSubmit ──→ capture_prompt.py ──→ turn-<sid>-<ts>.txt (new file)
+preToolUse       ──→ capture_tool.py   ──→ turn-<sid>-<ts>.txt (tool appended)
+postToolUse      ──→ capture_error.py  ──→ turn-<sid>-<ts>.txt (error appended)
 stop             ──→ auto_parse.sh     ──→ response appended
                                        ──→ extract worker spawned (async)
                                        ──→ older turn files archived
@@ -40,7 +40,12 @@ stop             ──→ auto_parse.sh     ──→ response appended
                                            prior turn
 ```
 
-Each turn has its own file, keyed by a nanosecond timestamp.
+Each turn has its own file, keyed by session ID (`KIRO_SESSION_ID`)
+and a nanosecond timestamp. Multiple sessions can run concurrently
+without interfering — each session only reads and writes its own
+turn files. The shared `long-term-memory.md` is protected by
+`flock` during writes.
+
 After the stop hook launches the extract worker, control returns
 to the user immediately — the worker finishes on its own timeline.
 
@@ -57,10 +62,11 @@ its snapshot, atomically replaces the main file, and cleans up.
 ### Components
 
 **`hooks/memory/capture_prompt.py`** — `userPromptSubmit`:
-creates a new `turn-<nanoseconds>.txt` and writes the `PROMPT:`
-line. A fresh file per turn means the pipeline tolerates
+creates a new `turn-<session_id>-<nanoseconds>.txt` and writes the
+`PROMPT:` line. A fresh file per turn means the pipeline tolerates
 concurrent turns and delayed worker completions without
-overwriting anything.
+overwriting anything. The session ID prefix ensures multiple
+concurrent Kiro instances never collide on turn files.
 
 **`hooks/memory/capture_tool.py`** — `preToolUse`: finds the most
 recent turn file (lexicographic max over `turn-*.txt`) and
@@ -76,9 +82,10 @@ most recent turn file and appends `ERROR: <text>` when
 `fungus-memory` when the prompt is ambiguous.
 
 **`hooks/memory/_common.py`** — shared helpers: `new_turn_file()`
-creates a timestamped turn file, `latest_turn_file()` returns the
-current turn (if any). Underscore prefix makes the router skip
-it.
+creates a session-scoped timestamped turn file,
+`latest_turn_file()` returns the current session's most recent
+turn (if any). Uses `KIRO_SESSION_ID` for isolation. Underscore
+prefix makes the router skip it.
 
 **`hooks/memory/auto_parse.sh`** — registered for `stop`:
 
@@ -175,14 +182,15 @@ Date: YYYY-MM-DD | Tags: tag1, tag2
 ```
 $KIRO_HOME/skills/fungus/data/
 ├── long-term-memory.md              # long-term store, KB-indexed
-├── turn-<nanoseconds>.txt           # one per in-flight or pending turn
+├── .memory.lock                     # flock file for concurrent writes
+├── turn-<session_id>-<ns>.txt       # one per in-flight or pending turn
 ├── memory-<ts>.snapshot.md          # distill: snapshot taken when worker spawned
 └── memory-<ts>.md                   # distill: worker's consolidated replacement
 ```
 
-Normally only the current turn file exists. Extra turn files mean
-one or more extract workers are still running or crashed
-mid-parse. Files whose workers crashed before rewriting will be
+Normally only the current session's turn file exists. Extra turn
+files (from the same or other sessions) mean extract workers are
+still running or crashed mid-parse. Files whose workers crashed before rewriting will be
 reclaimed on the next successful turn-end — or left to accumulate
 if the worker never succeeds on any turn.
 
@@ -216,10 +224,11 @@ few milliseconds of file IO there is invisible. Doing it at the
 next `userPromptSubmit` would couple archive work to the start
 of the user's next turn for no benefit.
 
-**Turn file per turn, keyed by nanosecond timestamp.** A single
-file would need locking or serialization; concurrent
-userPromptSubmits could clobber each other. Per-file isolation
-makes each turn independent.
+**Turn file per turn, keyed by session ID and nanosecond
+timestamp.** A single file would need locking or serialization;
+concurrent sessions could clobber each other. Per-session,
+per-turn file isolation makes each turn independent and allows
+multiple Kiro instances to run safely in parallel.
 
 **No database.** A turn file is a buffer, `long-term-memory.md`
 is the store. A SQLite lifecycle has no reason to exist once

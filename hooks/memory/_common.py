@@ -4,6 +4,7 @@ Filename starts with an underscore so router.py skips it during
 hook dispatch — this module is import-only, not a hook itself.
 
 Reads FUNGUS_ROOT from the environment (set by router.py).
+Uses KIRO_SESSION_ID to isolate turn files per session.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 
 FUNGUS_ROOT = Path(os.environ["FUNGUS_ROOT"])
 DATA_DIR = FUNGUS_ROOT / "data"
+SESSION_ID = os.environ.get("KIRO_SESSION_ID", "default")
 
 NOISE_TOOLS = frozenset({"fs_read", "grep", "glob"})
 MIN_PROMPT_LEN = 5
@@ -35,12 +37,12 @@ def read_payload() -> dict:
 
 
 def new_turn_file() -> Path:
-    """Create a new turn file keyed by nanosecond timestamp."""
+    """Create a new turn file keyed by session ID and nanosecond timestamp."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return DATA_DIR / f"turn-{time.time_ns()}.txt"
+    return DATA_DIR / f"turn-{SESSION_ID}-{time.time_ns()}.txt"
 
 
 def latest_turn_file() -> Path | None:
-    """Return the most recent turn file (lexicographic max), or None."""
-    turns = sorted(DATA_DIR.glob("turn-*.txt"))
+    """Return the most recent turn file for the current session, or None."""
+    turns = sorted(DATA_DIR.glob(f"turn-{SESSION_ID}-*.txt"))
     return turns[-1] if turns else None
