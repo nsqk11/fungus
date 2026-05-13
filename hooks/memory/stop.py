@@ -28,6 +28,13 @@ def main() -> None:
     econn.commit()
     econn.close()
 
+    # Cleanup stale drop markers (event already deleted)
+    mconn.execute(
+        "DELETE FROM meta WHERE key LIKE 'dropped_%' AND CAST(SUBSTR(key, 9) AS INTEGER) < ?",
+        (cutoff,),
+    )
+    mconn.commit()
+
     # Spawn extract worker
     if os.path.isfile(EXTRACT_CRITERIA):
         with open(EXTRACT_CRITERIA) as f:
