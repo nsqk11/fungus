@@ -63,6 +63,10 @@ Run `list` first, then for each turn decide keep or drop per the criteria above.
             ["kiro-cli", "chat", "--no-interactive", "--trust-all-tools", extract_prompt],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
+        display = os.environ.get("AGENT_DISPLAY_OUT")
+        if display:
+            with open(display, "w") as f:
+                f.write("\033[35m[memory]\033[0m extracting turn...\n")
 
     # Distill trigger
     lock = mconn.execute("SELECT value FROM meta WHERE key = 'distill_lock'").fetchone()
