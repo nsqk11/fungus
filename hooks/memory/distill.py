@@ -71,6 +71,12 @@ def apply_distill(entries_json: str) -> None:
 
     # Re-export full long-term-memory.md
     _export_all()
+
+    # Reclaim space after bulk delete
+    conn = get_conn()
+    conn.execute("VACUUM")
+    conn.close()
+
     print(f"Distill applied: {len(entries)} entries replaced {max_id} old entries.")
 
 
