@@ -23,151 +23,172 @@ Do not write to the memory store directly.
 
 ## How the property works
 
-Memory is implemented as an asynchronous pipeline backed by SQLite.
-You do not invoke it; it observes.
+Memory is event-sourced. The router writes every hook event to a
+shared `events.db`; downstream hooks read from it.
 
 ```
-userPromptSubmit ──→ capture_prompt.py ──→ INSERT turn (status='userPromptSubmit')
-preToolUse       ──→ capture_tool.py   ──→ UPDATE tools column (status='preToolUse')
-postToolUse      ──→ capture_error.py  ──→ UPDATE tools column with error (status='postToolUse')
-stop             ──→ stop.py           ──→ UPDATE response (status='stop')
-                                       ──→ extract worker spawned (async)
+Router (all hooks) ──→ INSERT into events.db
+                       ↓ (read by)
+stop hook         ──→ cleanup old events
+                  ──→ spawn extract worker (async)
+extract worker    ──→ derive turns from events
+                  ──→ keep/drop → memories table + md export
 ```
 
-All state lives in `data/memory.db` (SQLite, WAL mode). Multiple
-sessions can run concurrently without interfering — SQLite handles
+All raw events live in `data/events.db` (SQLite, WAL mode).
+Memory state lives in `data/memory.db` (separate DB).
+Multiple sessions can run concurrently — SQLite WAL handles
 locking internally.
 
 After the stop hook spawns the extract worker, control returns
 to the user immediately — the worker finishes on its own timeline.
 
-The extract worker reads all turns with status='stop', judges each
-one per `parse-criteria.md`, and calls `extract.py keep` or
-`extract.py drop`. Kept entries are inserted into the `memories`
-table and appended to `long-term-memory.md` for KB indexing.
+The extract worker queries `events.db` to derive completed turns
+(prompt + tools + response), judges each per `parse-criteria.md`,
+and writes results to `memory.db`. Kept entries are also appended
+to `long-term-memory.md` for KB indexing.
 
 ### Components
 
-**`hooks/memory/_db.py`** — SQLite schema and connection helper.
-Not a hook (underscore prefix). Defines `turns` and `memories`
-tables, WAL mode, and `get_conn()`.
+**`hooks/router.py`** — registered as the Kiro hook handler.
+Reads payload from stdin, inserts into `events.db` via
+`insert_event()`, then dispatches to matching hook scripts.
+The router only writes; it never reads events.
 
-**`hooks/memory/capture_prompt.py`** — `userPromptSubmit`:
-INSERT a new row into `turns` with the prompt text and
-status='userPromptSubmit'.
+**`hooks/memory/_db.py`** — shared DB helpers. Manages two
+databases: `events.db` (schema + `insert_event()`) and
+`memory.db` (memories + meta tables). Not a hook (underscore
+prefix).
 
-**`hooks/memory/capture_tool.py`** — `preToolUse`: UPDATE the
-current session's latest turn, appending the tool name to the
-`tools` column. Skips noise tools (fs_read, grep, glob).
-
-**`hooks/memory/capture_error.py`** — `postToolUse`: UPDATE the
-current session's latest turn, appending error text to `tools`
-when `tool_response.success` is false.
-
-**`hooks/memory/remind_search.py`** — `userPromptSubmit`: emits a
-`<memory-reminder>` context entry nudging the agent to search
-`fungus-memory` when the prompt is ambiguous.
-
-**`hooks/memory/stop.py`** — `stop`: UPDATE the turn with the
-assistant response and status='stop', then spawn a detached
-extract worker.
+**`hooks/memory/stop.py`** — `stop`: cleanup events older than
+24h (preserving those linked to memories), cleanup stale drop
+markers from meta, VACUUM if rows were deleted, then spawn
+extract worker. Also triggers distill when memories ≥ 200.
 
 **`hooks/memory/extract.py`** — CLI tool used by the extract
 worker:
 
 ```bash
-python3.12 extract.py list                              # show status='stop' turns
-python3.12 extract.py keep <id> "<summary>" "<detail>" "<tags>"
-python3.12 extract.py drop <id>
+python3.12 extract.py list
+python3.12 extract.py keep <prompt_event_id> "<summary>" "<detail>" "<tags>"
+python3.12 extract.py drop <prompt_event_id>
 ```
 
-Uses optimistic locking (claim via UPDATE WHERE status='stop')
-so multiple workers never process the same turn twice.
+Derives turns by querying events between consecutive
+`userPromptSubmit` events. Uses `memory.db` to track which
+turns have been processed (kept → memories table, dropped →
+meta table).
+
+**`hooks/memory/distill.py`** — CLI tool for memory
+consolidation:
+
+```bash
+python3.12 distill.py list
+python3.12 distill.py apply '<json_array>'
+python3.12 distill.py unlock
+```
+
+Triggered from `stop.py` when memories ≥ 200. Merges/deduplicates
+entries, re-exports `long-term-memory.md`, and VACUUMs memory.db.
+
+**`hooks/memory/remind_search.py`** — `userPromptSubmit`: emits
+a `<memory-reminder>` context entry nudging the agent to search
+`fungus-memory` when the prompt is ambiguous.
+
+**`hooks/audit/on_pre_tool.py`** — `preToolUse`: queries
+`events.db` for consecutive `postToolUse` failures of the same
+tool in the current turn. Emits `<audit-reminder>` when the
+streak reaches 3.
 
 **`prompts/parse-criteria.md`** — the extract worker's
 operating manual: what to keep, what to drop, and the entry
-format. Loaded into the worker prompt verbatim.
+format.
 
 **`data/long-term-memory.md`** — append-only Markdown export,
-indexed as the `fungus-memory` knowledge base with `autoUpdate:
-true`. This is a materialized view for KB indexing, not the
-source of truth.
+indexed as the `fungus-memory` knowledge base. Materialized
+view for KB indexing, not the source of truth.
 
-Entry format (defined by `parse-criteria.md`):
+### Database schemas
 
-```markdown
-## <one-sentence summary>
-
-Date: YYYY-MM-DD | Tags: tag1, tag2
-
-<optional 1-3 sentence detail>
-```
-
-### Database schema
+**events.db** (router writes, hooks read):
 
 ```sql
-CREATE TABLE turns (
-    id INTEGER PRIMARY KEY,
+CREATE TABLE events (
+    id INTEGER PRIMARY KEY,  -- time.time_ns()
     session_id TEXT NOT NULL,
-    prompt TEXT,
-    tools TEXT DEFAULT '',
-    response TEXT,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    hook TEXT NOT NULL,       -- agentSpawn/userPromptSubmit/preToolUse/postToolUse/stop
+    cwd TEXT,
+    prompt TEXT,             -- userPromptSubmit only
+    tool_name TEXT,          -- preToolUse/postToolUse only
+    tool_success INTEGER,    -- postToolUse only (1/0)
+    tool_error TEXT,         -- postToolUse only (on failure)
+    response TEXT            -- stop only
 );
+```
 
+**memory.db** (memory pipeline owns):
+
+```sql
 CREATE TABLE memories (
     id INTEGER PRIMARY KEY,
     summary TEXT NOT NULL,
     detail TEXT,
     tags TEXT,
     created_at TEXT NOT NULL,
-    source_turn_id INTEGER REFERENCES turns(id)
+    source_event_id INTEGER  -- links to events.id (the userPromptSubmit)
+);
+
+CREATE TABLE meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
 );
 ```
 
-### Status lifecycle
+### Turn derivation
+
+A turn is not stored explicitly. It is derived from events:
 
 ```
-userPromptSubmit → preToolUse → postToolUse → stop → extracting → archived/dropped
+Turn = all events between a userPromptSubmit and the next
+       userPromptSubmit (same session), provided a stop event
+       exists in that range.
 ```
-
-Each hook updates status to its own name. The extract worker
-claims turns by setting status='extracting' (optimistic lock),
-then finalizes to 'archived' or 'dropped'.
 
 ### Runtime files
 
 ```
 $KIRO_HOME/skills/fungus/data/
-├── memory.db              # SQLite database (WAL mode)
-├── memory.db-wal          # WAL file (auto-managed)
-├── memory.db-shm          # shared memory (auto-managed)
+├── events.db              # raw hook events (WAL mode)
+├── memory.db              # memories + meta (WAL mode)
 └── long-term-memory.md    # KB-indexed export
 ```
 
 ## Design decisions
 
-**SQLite over files.** Eliminates turn-file naming, flock,
-snapshot/tail merge, and file-as-state-marker complexity. WAL
-mode handles concurrent writes without manual locking.
+**Event-sourced.** Router writes once, hooks read. No UPDATE,
+no status flow, no cross-hook data passing. Each hook event is
+an immutable fact.
 
-**Per-turn extraction.** Each turn is a complete causal unit.
-Per-session extraction risks information loss from context
-dilution and unreliable session-end triggers.
+**Two separate databases.** events.db is owned by the router
+(write-only, append-only). memory.db is owned by the memory
+pipeline. Separation of concerns; either can be deleted
+independently.
 
-**Optimistic locking for extract workers.** Multiple workers
-can run safely in parallel — each claims a turn atomically
-before processing. No blocking, no starvation.
+**Turn derived, not stored.** No turns table. A turn is a SQL
+query over events. This eliminates status columns, UPDATE
+operations, and the complexity of tracking turn lifecycle.
 
-**Immediate MD export on keep.** Each `keep_turn` appends to
-`long-term-memory.md` so the KB indexes new entries without
-waiting for a batch export.
+**24h event retention.** Events older than 24h are deleted
+(unless linked to a memory). This bounds DB size without
+losing anything valuable — kept turns are preserved in
+memories, dropped turns are forgotten by design.
 
-**Status as hook name.** Using the hook event name as the
-status value makes the lifecycle self-documenting and
-debuggable via a simple SELECT.
+**Drop markers cleaned with events.** When an event is deleted,
+its `dropped_<id>` meta entry is also removed, preventing
+unbounded meta table growth.
+
+**VACUUM only when rows deleted.** Avoids unnecessary IO on
+every stop.
 
 **Memory is a property, not a skill.** There is no `SKILL.md`,
 no description to match, no user-facing trigger. Memory is part
