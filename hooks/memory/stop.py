@@ -25,7 +25,10 @@ def main() -> None:
         econn.execute(f"DELETE FROM events WHERE id < ? AND id NOT IN ({placeholders})", [cutoff] + linked)
     else:
         econn.execute("DELETE FROM events WHERE id < ?", (cutoff,))
+    deleted = econn.execute("SELECT changes()").fetchone()[0]
     econn.commit()
+    if deleted:
+        econn.execute("VACUUM")
     econn.close()
 
     # Cleanup stale drop markers (event already deleted)
