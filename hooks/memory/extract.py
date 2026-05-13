@@ -1,69 +1,84 @@
 #!/usr/bin/env python3.12
-"""Extract worker CLI: list pending turns, keep or drop them.
+"""Extract worker CLI: list pending turns from events DB, keep or drop.
 
 Usage:
     python3.12 extract.py list
-    python3.12 extract.py keep <id> "<summary>" "<detail>" "<tags>"
-    python3.12 extract.py drop <id>
+    python3.12 extract.py keep <prompt_event_id> "<summary>" "<detail>" "<tags>"
+    python3.12 extract.py drop <prompt_event_id>
 """
 
 import sys
 from datetime import date
 
-from _db import DATA_DIR, get_conn
+from _db import DATA_DIR, get_events_conn, get_memory_conn
 
 
 def list_turns() -> None:
-    conn = get_conn()
-    rows = conn.execute(
-        "SELECT id, prompt, tools, response FROM turns WHERE status = 'stop'"
-    ).fetchall()
-    conn.close()
-    if not rows:
+    econn = get_events_conn()
+    mconn = get_memory_conn()
+
+    # Get already-processed event ids
+    kept = {r[0] for r in mconn.execute("SELECT source_event_id FROM memories WHERE source_event_id IS NOT NULL").fetchall()}
+    dropped = {int(r[0].split("_", 1)[1]) for r in mconn.execute("SELECT key FROM meta WHERE key LIKE 'dropped_%'").fetchall()}
+    processed = kept | dropped
+    mconn.close()
+
+    # Get all userPromptSubmit events
+    prompts = econn.execute("SELECT id, session_id, prompt FROM events WHERE hook = 'userPromptSubmit' ORDER BY id").fetchall()
+
+    pending = []
+    for pid, sid, prompt in prompts:
+        if pid in processed:
+            continue
+        # Check if this turn has a stop event
+        next_prompt = econn.execute(
+            "SELECT MIN(id) FROM events WHERE session_id = ? AND hook = 'userPromptSubmit' AND id > ?", (sid, pid)
+        ).fetchone()[0] or 9999999999999999999
+        stop = econn.execute(
+            "SELECT response FROM events WHERE session_id = ? AND hook = 'stop' AND id > ? AND id < ? ORDER BY id DESC LIMIT 1",
+            (sid, pid, next_prompt),
+        ).fetchone()
+        if not stop:
+            continue
+        tools = econn.execute(
+            "SELECT tool_name FROM events WHERE session_id = ? AND hook = 'preToolUse' AND id > ? AND id < ?",
+            (sid, pid, next_prompt),
+        ).fetchall()
+        pending.append((pid, prompt, [t[0] for t in tools], stop[0]))
+
+    econn.close()
+
+    if not pending:
         print("No pending turns.")
         return
-    for r in rows:
-        print(f"--- Turn {r[0]} ---")
-        print(f"PROMPT: {r[1]}")
-        if r[2]:
-            print(r[2])
-        if r[3]:
-            print(f"RESPONSE: {r[3][:200]}")
+    for pid, prompt, tools, response in pending:
+        print(f"--- Turn {pid} ---")
+        print(f"PROMPT: {prompt}")
+        if tools:
+            print(f"TOOLS: {', '.join(tools)}")
+        if response:
+            print(f"RESPONSE: {response[:200]}")
         print()
 
 
-def claim_turn(turn_id: int) -> bool:
-    """Optimistic lock: claim a turn for extraction. Returns False if already claimed."""
-    conn = get_conn()
-    cur = conn.execute(
-        "UPDATE turns SET status = 'extracting' WHERE id = ? AND status = 'stop'",
-        (turn_id,),
+def keep_turn(event_id: int, summary: str, detail: str = "", tags: str = "") -> None:
+    mconn = get_memory_conn()
+    mconn.execute(
+        "INSERT INTO memories (summary, detail, tags, source_event_id) VALUES (?, ?, ?, ?)",
+        (summary, detail, tags, event_id),
     )
-    conn.commit()
-    ok = cur.rowcount > 0
-    conn.close()
-    return ok
-
-
-def keep_turn(turn_id: int, summary: str, detail: str = "", tags: str = "") -> None:
-    conn = get_conn()
-    conn.execute(
-        "INSERT INTO memories (summary, detail, tags, source_turn_id) VALUES (?, ?, ?, ?)",
-        (summary, detail, tags, turn_id),
-    )
-    conn.execute("UPDATE turns SET status = 'archived' WHERE id = ?", (turn_id,))
-    conn.commit()
-    conn.close()
+    mconn.commit()
+    mconn.close()
     _export_memory(summary, detail, tags)
-    print(f"Turn {turn_id} archived.")
+    print(f"Turn {event_id} archived.")
 
 
-def drop_turn(turn_id: int) -> None:
-    conn = get_conn()
-    conn.execute("UPDATE turns SET status = 'dropped' WHERE id = ?", (turn_id,))
-    conn.commit()
-    conn.close()
-    print(f"Turn {turn_id} dropped.")
+def drop_turn(event_id: int) -> None:
+    mconn = get_memory_conn()
+    mconn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')", (f"dropped_{event_id}",))
+    mconn.commit()
+    mconn.close()
+    print(f"Turn {event_id} dropped.")
 
 
 def _export_memory(summary: str, detail: str, tags: str) -> None:
@@ -79,26 +94,13 @@ def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
         return
-
     cmd = sys.argv[1]
-
     if cmd == "list":
         list_turns()
     elif cmd == "keep" and len(sys.argv) >= 4:
-        turn_id = int(sys.argv[2])
-        if not claim_turn(turn_id):
-            print(f"Turn {turn_id} already claimed by another worker.")
-            return
-        summary = sys.argv[3]
-        detail = sys.argv[4] if len(sys.argv) > 4 else ""
-        tags = sys.argv[5] if len(sys.argv) > 5 else ""
-        keep_turn(turn_id, summary, detail, tags)
+        keep_turn(int(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else "", sys.argv[5] if len(sys.argv) > 5 else "")
     elif cmd == "drop" and len(sys.argv) >= 3:
-        turn_id = int(sys.argv[2])
-        if not claim_turn(turn_id):
-            print(f"Turn {turn_id} already claimed by another worker.")
-            return
-        drop_turn(turn_id)
+        drop_turn(int(sys.argv[2]))
     else:
         print(__doc__)
 

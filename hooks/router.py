@@ -121,6 +121,11 @@ def main() -> None:
     if not hook:
         return
 
+    # Store raw event before dispatching to hooks
+    sys.path.insert(0, str(HOOKS_DIR / "memory"))
+    from _db import insert_event
+    insert_event(hook, json.loads(payload))
+
     for script, _label in _resolve(hook):
         _run(script, payload)
 
