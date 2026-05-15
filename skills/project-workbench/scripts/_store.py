@@ -28,37 +28,26 @@ class StoreError(Exception):
 
 
 def data_dir() -> Path:
-    """Return the directory that holds one JSON file per workbench.
+    """Return the directory that holds workbench JSON files.
 
     Resolution order:
 
-    1. ``PROJECT_WORKBENCH_DIR`` environment variable (absolute path to
-       the workbench directory itself).
-    2. ``FUNGUS_ROOT`` environment variable — the directory below is
-       ``skills/project-workbench/data/workbenches``.
-    3. Fallback: walk up from this file; use
-       ``<skill-dir>/data/workbenches``.
+    1. ``PROJECT_WORKBENCH_DIR`` environment variable (absolute path).
+    2. ``FUNGUS_ROOT`` → ``skills/project-workbench``.
+    3. Fallback: the skill directory (two parents up from this file).
     """
     override = os.environ.get("PROJECT_WORKBENCH_DIR")
     if override:
         return Path(override)
     fungus_root = os.environ.get("FUNGUS_ROOT")
     if fungus_root:
-        return (
-            Path(fungus_root)
-            / "skills"
-            / "project-workbench"
-            / "data"
-            / "workbenches"
-        )
-    # Script lives at <skill-dir>/scripts/_store.py, so two parents up is
-    # the skill directory.
-    skill_dir = Path(__file__).resolve().parent.parent
-    return skill_dir / "data" / "workbenches"
+        return Path(fungus_root) / "skills" / "project-workbench"
+    # Script lives at <skill-dir>/scripts/_store.py
+    return Path(__file__).resolve().parent.parent
 
 
 def workbench_path(workbench_id: str) -> Path:
-    return data_dir() / f"{workbench_id}.json"
+    return data_dir() / f".{workbench_id}.json"
 
 
 # --- I/O -----------------------------------------------------------------
@@ -129,7 +118,7 @@ def list_ids() -> list[str]:
     d = data_dir()
     if not d.is_dir():
         return []
-    return sorted(p.stem for p in d.glob("*.json"))
+    return sorted(p.stem[1:] for p in d.glob(".*.json"))
 
 
 def resolve_id(prefix: str, *, exact: bool = False) -> str:

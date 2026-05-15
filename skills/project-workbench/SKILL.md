@@ -69,7 +69,7 @@ See `references/schema.md` for the full JSON shape and per-field rules.
 
 ## Storage
 
-Default: `skills/project-workbench/data/workbenches/<id>.json`.
+Default: `skills/project-workbench/.<id>.json`.
 Override: set `PROJECT_WORKBENCH_DIR`. Writes are atomic via
 `os.replace`. Timestamps are UTC ISO-8601.
 
