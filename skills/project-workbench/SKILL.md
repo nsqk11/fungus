@@ -1,130 +1,79 @@
 ---
 name: project-workbench
-description: "Per-project workbench that tracks lifecycle metadata kept outside source files: deliverable and reference paths, milestones with blockers, change log summaries, review comments with responses, and decision notes. Use when starting a new project, looking up a project's file paths or URLs, recording what was just changed, tracking review comments, checking what is blocking progress, or capturing the reasoning behind a decision for later defence. Trigger on: 'workbench', 'milestone', 'blocker', 'change log', 'review comment', 'decision note', 'project status', 'what did I change', 'where is the file for'. Do NOT use for source content itself (code, specs, slides), real-time collaboration (Jira, Linear, GitHub Issues), or syncing with external PM tools."
+description: "Per-project workbench that tracks lifecycle metadata kept outside source files: deliverable and reference paths, milestones with blockers, change log summaries, review comments with responses, and decision notes. Use when starting a new project, looking up a project's file paths or URLs, recording what was just changed, tracking review comments, checking what is blocking progress, or capturing the reasoning behind a decision for later defence. Trigger on: 'workbench', 'milestone', 'blocker', 'change log', 'review comment', 'decision note', 'project status', 'what did I change', 'where is the file for', '项目进度', '交付物', '评审意见', '里程碑', '记录一下改了什么', '文件放哪了'. Do NOT use for source content itself (code, specs, slides), real-time collaboration (Jira, Linear, GitHub Issues), or syncing with external PM tools."
 ---
 
 # project-workbench
 
-One JSON file per project under ``data/workbenches/<id>.json``. Stores
-the lifecycle metadata that source files, git history, and memory do
-not: resource paths, milestones with blockers, change log summaries,
-review comments, and decision notes.
+One JSON file per project under `data/workbenches/<id>.json`. Stores
+lifecycle metadata that source files, git history, and memory do not
+cover: resource paths, milestones, change log, review comments, and
+decision notes.
 
 ## Scope
 
-- **Does**
-  - Maintain a per-project index of deliverables (what you are
-    producing) and references (what you are consuming).
-  - Track milestones with target dates and blocker notes.
-  - Record one-line change log entries with optional git-sha / PR refs.
-  - Capture review comments, who raised them, and your response.
-  - Store decision notes (why you chose X over Y) so you can defend
-    them later.
-  - Surface pending milestones and open review comments on demand via
-    ``status`` and ``remind``.
-- **Does not**
-  - Store source content. The source code, spec, or document itself
-    lives elsewhere; this skill stores pointers and metadata only.
-  - Sync with Jira, Linear, GitHub Issues, or any other PM tool. It is
-    a local JSON store by design.
-  - Replace a todo list. Milestones are project-scoped lifecycle
-    markers, not daily tasks.
-  - Encrypt data. Do not write secrets into workbench fields.
+**Does:** maintain deliverable/reference paths, milestones with
+blockers, one-line change log entries, review comments with responses,
+decision notes, and surface pending items via `status`/`remind`.
 
-## Entry points
+**Does not:** store source content (only pointers), sync with external
+PM tools, replace a todo list, or handle secrets.
 
-Run from the skill directory (path shown from the repo root):
+## CLI
 
 ```
 python3.12 skills/project-workbench/scripts/cli.py <command> [args...]
-python3.12 skills/project-workbench/scripts/cli.py --help
-python3.12 skills/project-workbench/scripts/cli.py <command> --help
 ```
 
-Commands:
+`<id>` accepts any unique prefix after `init`.
 
-```
-init      <id> --name NAME [--type TYPE]
-query     <id> [--field PATH]
-log       <id> --summary TEXT [--date YYYY-MM-DD] [--ref REF]
-review    add  <id> --comment TEXT --by WHO [--location LOC] [--response TEXT]
-review    done <id> --review-id N [--response TEXT]
-milestone add    <id> --name NAME [--target T] [--note N]
-milestone done   <id> --name NAME [--note N]
-milestone update <id> --name NAME [--target T] [--note N]
-note      <id> --topic T --content C
-status    <id>
-list      [--status active|paused|done|archived]
-remind
-archive   <id>
-done      <id>
-```
-
-``<id>`` accepts any unique prefix after ``init``. A typo-prone full
-ID like ``my-project-2026-q2`` only needs enough prefix to be
-unambiguous.
+| Command | Purpose |
+|---------|---------|
+| `init <id> --name NAME [--type T]` | Create workbench |
+| `query <id> [--field PATH]` | Print data (dot-path into JSON) |
+| `deliverable add <id> --label L [--type T] [--path P\|--url U]` | Register an output |
+| `deliverable rm <id> --label L` | Remove a deliverable |
+| `reference add <id> --label L [--type T] [--path P\|--url U]` | Register an input |
+| `reference rm <id> --label L` | Remove a reference |
+| `log <id> --summary TEXT [--date D] [--ref R]` | Append change log entry |
+| `review add <id> --comment C --by WHO [--location L] [--response R]` | Record review comment |
+| `review done <id> --review-id N [--response R]` | Close a review comment |
+| `milestone add <id> --name N [--target T] [--note N]` | Add milestone |
+| `milestone done <id> --name N [--note N]` | Mark milestone done |
+| `milestone update <id> --name N [--target T] [--note N]` | Update target/note |
+| `note <id> --topic T --content C` | Add decision note |
+| `status <id>` | Pending milestones + open reviews |
+| `list [--status S]` | List workbenches |
+| `remind` | Pending items across all active workbenches |
+| `archive <id>` / `done <id>` | Change status |
 
 ## When to use
 
-| User intent / cue                                  | Command                          |
-|----------------------------------------------------|----------------------------------|
-| "Starting a new project / study / feature"         | ``init``                         |
-| "Where did I put the spec / slides / PR?"          | ``query --field deliverables``   |
-| "I just updated the design doc"                    | ``log --summary "..."``          |
-| "Reviewer X said Y in today's review"              | ``review add``                   |
-| "I fixed the issue the reviewer raised"            | ``review done --response "..."`` |
-| "Move the Final Review date"                       | ``milestone update --target T``  |
-| "Record why I chose approach A"                    | ``note --topic ... --content ...``|
-| "What's blocking this project"                     | ``status``                       |
-| "What projects are active and what's pending"      | ``remind``                       |
-| "Shelve this project, might come back to it"       | ``archive``                      |
-| "This project is done, keep it for reference"      | ``done``                         |
+| User intent | Command |
+|-------------|---------|
+| Starting a new project/study | `init` |
+| Registering a deliverable or reference | `deliverable add` / `reference add` |
+| "Where is the spec/slides/PR?" | `query --field deliverables` |
+| "I just updated the design doc" | `log` |
+| "Reviewer X said Y" | `review add` |
+| "Fixed the reviewer's issue" | `review done` |
+| "Move the Final Review date" | `milestone update` |
+| "Record why I chose approach A" | `note` |
+| "What's blocking this project" | `status` |
+| "What's pending across projects" | `remind` |
+| "Shelve / finish this project" | `archive` / `done` |
 
-## Field reference
+## Schema
 
-See ``references/schema.md`` for the full JSON shape and per-field
-rules. Read it before composing a query that targets nested fields.
+See `references/schema.md` for the full JSON shape and per-field rules.
 
 ## Storage
 
-- Default location: ``skills/project-workbench/data/workbenches/<id>.json``.
-- Override by setting ``PROJECT_WORKBENCH_DIR`` to an absolute path.
-- Each write is atomic (``os.replace`` via a sibling temp file). Safe
-  to interrupt.
-- ``createdAt`` is set on ``init``; ``updatedAt`` is refreshed on every
-  write. Both are UTC ISO-8601.
+Default: `skills/project-workbench/data/workbenches/<id>.json`.
+Override: set `PROJECT_WORKBENCH_DIR`. Writes are atomic via
+`os.replace`. Timestamps are UTC ISO-8601.
 
-## Not a skill to advertise
+## Behaviour
 
-This skill does not teach the user about project management. It is a
-silent backing store that accumulates metadata across sessions. Do not
-recite its capabilities to the user unless asked; just use it.
-
-## Automatic reminders (opt-in)
-
-``remind`` is intentionally a manual command. If the user wants its
-output injected at agent startup, add a small hook script in this
-skill's ``scripts/`` directory:
-
-```python
-# scripts/_remind_on_spawn.py
-# @hook agentSpawn
-# @priority 10
-# @skill project-workbench
-# @description Inject pending items from every active workbench.
-
-import subprocess, sys
-from pathlib import Path
-
-cli = Path(__file__).resolve().parent / "cli.py"
-r = subprocess.run(
-    ["python3.12", str(cli), "remind"],
-    capture_output=True, text=True, check=False,
-)
-if r.stdout.strip():
-    sys.stdout.write("<workbench-reminder>\n")
-    sys.stdout.write(r.stdout)
-    sys.stdout.write("</workbench-reminder>\n")
-```
-
-Do not add this by default; inject it only when the user asks.
+This is a silent backing store. Do not advertise capabilities unless
+asked — just use it when the context matches.

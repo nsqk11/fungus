@@ -210,6 +210,62 @@ def cmd_milestone_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_deliverable_add(args: argparse.Namespace) -> int:
+    wb_id = _resolve(args.id)
+    workbench = _load(wb_id)
+    entry: dict[str, Any] = {"label": args.label, "type": args.type or "file"}
+    if args.path:
+        entry["path"] = args.path
+    if args.url:
+        entry["url"] = args.url
+    workbench["deliverables"].append(entry)
+    _save(workbench)
+    print(f"OK: deliverable {args.label!r} added")
+    return 0
+
+
+def cmd_deliverable_rm(args: argparse.Namespace) -> int:
+    wb_id = _resolve(args.id)
+    workbench = _load(wb_id)
+    before = len(workbench["deliverables"])
+    workbench["deliverables"] = [
+        d for d in workbench["deliverables"] if d.get("label") != args.label
+    ]
+    if len(workbench["deliverables"]) == before:
+        _die(f"deliverable {args.label!r} not found in {wb_id!r}")
+    _save(workbench)
+    print(f"OK: deliverable {args.label!r} removed")
+    return 0
+
+
+def cmd_reference_add(args: argparse.Namespace) -> int:
+    wb_id = _resolve(args.id)
+    workbench = _load(wb_id)
+    entry: dict[str, Any] = {"label": args.label, "type": args.type or "file"}
+    if args.path:
+        entry["path"] = args.path
+    if args.url:
+        entry["url"] = args.url
+    workbench["references"].append(entry)
+    _save(workbench)
+    print(f"OK: reference {args.label!r} added")
+    return 0
+
+
+def cmd_reference_rm(args: argparse.Namespace) -> int:
+    wb_id = _resolve(args.id)
+    workbench = _load(wb_id)
+    before = len(workbench["references"])
+    workbench["references"] = [
+        r for r in workbench["references"] if r.get("label") != args.label
+    ]
+    if len(workbench["references"]) == before:
+        _die(f"reference {args.label!r} not found in {wb_id!r}")
+    _save(workbench)
+    print(f"OK: reference {args.label!r} removed")
+    return 0
+
+
 def cmd_note(args: argparse.Namespace) -> int:
     wb_id = _resolve(args.id)
     workbench = _load(wb_id)
@@ -388,6 +444,34 @@ def _build_parser() -> argparse.ArgumentParser:
     sp_upd.add_argument("--target", default=None)
     sp_upd.add_argument("--note", default=None)
     sp_upd.set_defaults(func=cmd_milestone_update)
+
+    sp = sub.add_parser("deliverable", help="Manage deliverables")
+    sp_sub = sp.add_subparsers(dest="deliverable_command", required=True)
+    sp_add = sp_sub.add_parser("add", help="Add a deliverable")
+    sp_add.add_argument("id")
+    sp_add.add_argument("--label", required=True)
+    sp_add.add_argument("--type", default="file")
+    sp_add.add_argument("--path", default="")
+    sp_add.add_argument("--url", default="")
+    sp_add.set_defaults(func=cmd_deliverable_add)
+    sp_rm = sp_sub.add_parser("rm", help="Remove a deliverable by label")
+    sp_rm.add_argument("id")
+    sp_rm.add_argument("--label", required=True)
+    sp_rm.set_defaults(func=cmd_deliverable_rm)
+
+    sp = sub.add_parser("reference", help="Manage references")
+    sp_sub = sp.add_subparsers(dest="reference_command", required=True)
+    sp_add = sp_sub.add_parser("add", help="Add a reference")
+    sp_add.add_argument("id")
+    sp_add.add_argument("--label", required=True)
+    sp_add.add_argument("--type", default="file")
+    sp_add.add_argument("--path", default="")
+    sp_add.add_argument("--url", default="")
+    sp_add.set_defaults(func=cmd_reference_add)
+    sp_rm = sp_sub.add_parser("rm", help="Remove a reference by label")
+    sp_rm.add_argument("id")
+    sp_rm.add_argument("--label", required=True)
+    sp_rm.set_defaults(func=cmd_reference_rm)
 
     sp = sub.add_parser("note", help="Add a decision note")
     sp.add_argument("id")

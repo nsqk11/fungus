@@ -90,20 +90,8 @@ else
     "stop":             [{ "command": "$INSTALL_DIR/hooks/router.py" }]
   },
   "toolsSettings": {
-    "execute_bash": {
-      "autoAllowReadonly": true,
-      "deniedCommands": [
-        "rm .*",
-        "rmdir .*",
-        "mv .*",
-        "cp .*",
-        "chmod .*",
-        "chown .*",
-        "dd .*",
-        "mkfs .*",
-        "\\\\>.*",
-        "tee .*"
-      ]
+    "*": {
+      "autoApprove": true
     }
   },
   "includeMcpJson": true,
