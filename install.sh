@@ -52,15 +52,18 @@ else
   mkdir -p "$(dirname "$COMMUNITY_SKILLS_DIR")"
   git clone --depth 1 "$COMMUNITY_SKILLS_REPO" "$COMMUNITY_SKILLS_DIR"
 fi
-for skill in docx pptx xlsx pdf; do
+for skill in docx pptx xlsx pdf skill-creator; do
   dest="$INSTALL_DIR/skills/$skill"
   [ -d "$dest" ] && rm -rf "$dest"
   cp -r "$COMMUNITY_SKILLS_DIR/skills/$skill" "$dest"
 done
 
-# Generate agent config
+# Generate agent config (only if not present; preserves user customizations)
 mkdir -p "$KIRO_HOME/agents"
-cat > "$AGENT_FILE" <<AGENT
+if [ -f "$AGENT_FILE" ]; then
+  echo "Agent config exists, skipping: $AGENT_FILE"
+else
+  cat > "$AGENT_FILE" <<AGENT
 {
   "name": "fungus",
   "description": "General-purpose AI coding agent with persistent memory.",
@@ -105,7 +108,8 @@ cat > "$AGENT_FILE" <<AGENT
   }
 }
 AGENT
-echo "Agent config: $AGENT_FILE"
+  echo "Agent config created: $AGENT_FILE"
+fi
 
 echo ""
 echo "Done. Start with:"
