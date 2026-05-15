@@ -35,8 +35,8 @@ def _resolve_db() -> Path:
     override = os.environ.get("ATLASSIAN_API_DB")
     if override:
         return Path(override)
-    # This file sits at <skill>/references/; the DB lives at <skill>/data/store.db.
-    return Path(__file__).resolve().parent.parent / "data" / "store.db"
+    # This file sits at <skill>/references/; the DB lives at <skill>/.atlassian.db.
+    return Path(__file__).resolve().parent.parent / ".atlassian.db"
 
 
 def load_pat(domain: str) -> str:

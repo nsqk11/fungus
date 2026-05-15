@@ -60,7 +60,7 @@ Key rules:
 
 ## Data
 
-SQLite at `data/store.db` (mode `0600`). Override with `ATLASSIAN_API_DB` env var.
+SQLite at `.atlassian.db` (mode `0600`). Override with `ATLASSIAN_API_DB` env var.
 
 Tables: `tokens`, `confluence_pages` (body cache), `confluence_pages_fts` (FTS5).
 

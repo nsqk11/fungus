@@ -1,6 +1,6 @@
 """Token storage, testing, and authenticated client factories.
 
-Tokens live in a single SQLite file at ``<skill>/data/store.db`` with file
+Tokens live in a single SQLite file at ``<skill>/.atlassian.db`` with file
 mode ``0600``. Override the path with the ``ATLASSIAN_API_DB`` environment
 variable (useful for tests).
 
@@ -40,7 +40,7 @@ def db_path() -> Path:
     override = os.environ.get("ATLASSIAN_API_DB")
     if override:
         return Path(override)
-    return Path(__file__).resolve().parent.parent / "data" / "store.db"
+    return Path(__file__).resolve().parent.parent / ".atlassian.db"
 
 
 def normalise_domain(value: str) -> str:
