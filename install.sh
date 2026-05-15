@@ -105,7 +105,10 @@ else
         "tee .*"
       ]
     }
-  }
+  },
+  "includeMcpJson": true,
+  "model": null,
+  "keyboardShortcut": "alt+f"
 }
 AGENT
   echo "Agent config created: $AGENT_FILE"
