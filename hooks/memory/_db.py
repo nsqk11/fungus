@@ -21,6 +21,15 @@ MIN_PROMPT_LEN = 5
 FAILURE_THRESHOLD = 3
 DISTILL_THRESHOLD = 200
 
+CATEGORIES = (
+    "semantic", "episodic", "autobiographical",
+    "skill", "habit", "reflex", "metacognitive",
+    "prospective", "emotional",
+)
+
+DECLARATIVE = ("semantic", "episodic", "autobiographical")
+NON_DECLARATIVE = ("skill", "habit", "reflex", "metacognitive", "prospective", "emotional")
+
 _EVENTS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY,
@@ -41,6 +50,7 @@ CREATE TABLE IF NOT EXISTS memories (
     summary TEXT NOT NULL,
     detail TEXT,
     tags TEXT,
+    category TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
     source_event_id INTEGER
 );
@@ -50,6 +60,8 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT
 );
 """
+
+_MIGRATE_CATEGORY = "ALTER TABLE memories ADD COLUMN category TEXT"
 
 
 def get_events_conn() -> sqlite3.Connection:
@@ -65,6 +77,11 @@ def get_memory_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(MEMORY_DB), timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_MEMORY_SCHEMA)
+    # Migrate: add category column if missing
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(memories)").fetchall()}
+    if "category" not in cols:
+        conn.execute(_MIGRATE_CATEGORY)
+        conn.commit()
     return conn
 
 

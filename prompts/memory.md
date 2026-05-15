@@ -7,8 +7,8 @@ Past insights surface through knowledge-base search when relevant.
 ## What this means for you
 
 You do not manage memory manually.
-A background pipeline records each turn, distills it into a short
-entry, and appends it to a searchable store.
+A background pipeline records each turn, extracts memories across
+9 cognitive directions, and stores them in a searchable store.
 The next time a related topic comes up, the relevant entry is
 available through the `fungus-memory` knowledge base.
 
@@ -21,10 +21,40 @@ pipeline will capture it from the turn.
 Do not ask the user to confirm a memory entry.
 Do not write to the memory store directly.
 
-## How the property works
+## Memory taxonomy
 
-Memory is event-sourced. The router writes every hook event to a
-shared `events.db`; downstream hooks read from it.
+Memory is classified into 9 directions based on cognitive
+psychology (Squire 1992, Tulving 1985):
+
+### Declarative (→ Knowledge Base, on-demand retrieval)
+
+| Direction | What it captures |
+|-----------|-----------------|
+| **Semantic** | Facts, knowledge, terminology, configuration |
+| **Episodic** | Specific events with causal chains, lessons |
+| **Autobiographical** | Identity, relationships, roles |
+
+### Non-declarative (→ Prompt, always active)
+
+| Direction | What it captures |
+|-----------|-----------------|
+| **Skill** | Methods, procedures, multi-step approaches |
+| **Habit** | User-preference-driven behavioral constraints |
+| **Reflex** | Signal → action condition rules |
+| **Metacognitive** | Self-knowledge about capabilities and limits |
+
+### Cross-cutting
+
+| Direction | What it captures |
+|-----------|-----------------|
+| **Prospective** | Future commitments, deferred actions |
+| **Emotional** | User's strong attitudes toward topics |
+
+Non-declarative memories are the upstream of skills. When
+procedural knowledge consolidates sufficiently, it graduates
+into a SKILL.md.
+
+## How the pipeline works
 
 ```
 Router (all hooks) ──→ INSERT into events.db
@@ -32,7 +62,9 @@ Router (all hooks) ──→ INSERT into events.db
 stop hook         ──→ cleanup old events
                   ──→ spawn extract worker (async)
 extract worker    ──→ derive turns from events
-                  ──→ keep/drop → memories table + md export
+                  ──→ multi-direction extraction (1 LLM call)
+                  ──→ JSON array → memories table (with category)
+                  ──→ export split files
 ```
 
 All raw events live in `data/events.db` (SQLite, WAL mode).
@@ -40,73 +72,57 @@ Memory state lives in `data/memory.db` (separate DB).
 Multiple sessions can run concurrently — SQLite WAL handles
 locking internally.
 
-After the stop hook spawns the extract worker, control returns
-to the user immediately — the worker finishes on its own timeline.
-
-The extract worker queries `events.db` to derive completed turns
-(prompt + tools + response), judges each per `parse-criteria.md`,
-and writes results to `memory.db`. Kept entries are also appended
-to `long-term-memory.md` for KB indexing.
+The extract worker uses `prompts/extract-criteria.md` as its
+operating manual. One LLM call per turn evaluates all 9
+directions independently. Output is a JSON array where each
+element carries a `category` field.
 
 ### Components
 
 **`hooks/router.py`** — registered as the Kiro hook handler.
 Reads payload from stdin, inserts into `events.db` via
 `insert_event()`, then dispatches to matching hook scripts.
-The router only writes; it never reads events.
 
 **`hooks/memory/_db.py`** — shared DB helpers. Manages two
 databases: `events.db` (schema + `insert_event()`) and
-`memory.db` (memories + meta tables). Not a hook (underscore
-prefix).
+`memory.db` (memories + meta tables). Defines category
+constants.
 
 **`hooks/memory/stop.py`** — `stop`: cleanup events older than
-24h (preserving those linked to memories), cleanup stale drop
-markers from meta, VACUUM if rows were deleted, then spawn
-extract worker. Also triggers distill when memories ≥ 200.
+24h, cleanup stale drop markers, VACUUM if rows deleted, spawn
+extract worker. Triggers distill when memories ≥ 200.
 
-**`hooks/memory/extract.py`** — CLI tool used by the extract
-worker:
+**`hooks/memory/extract.py`** — CLI tool:
 
 ```bash
-python3.12 extract.py list
-python3.12 extract.py keep <prompt_event_id> "<summary>" "<detail>" "<tags>"
-python3.12 extract.py drop <prompt_event_id>
+python3.12 extract.py list                    # show pending turns
+python3.12 extract.py run                     # output turns for LLM processing
+python3.12 extract.py keep '<json>' <event_id>  # save LLM output
+python3.12 extract.py drop <event_id>           # mark turn as dropped
 ```
 
-Derives turns by querying events between consecutive
-`userPromptSubmit` events. Uses `memory.db` to track which
-turns have been processed (kept → memories table, dropped →
-meta table).
+The `keep` command accepts a JSON array of extracted memories:
 
-**`hooks/memory/distill.py`** — CLI tool for memory
-consolidation:
-
-```bash
-python3.12 distill.py list
-python3.12 distill.py apply '<json_array>'
-python3.12 distill.py unlock
+```json
+[
+  {
+    "category": "semantic",
+    "summary": "...",
+    "detail": "...",
+    "tags": "tag1, tag2"
+  }
+]
 ```
 
-Triggered from `stop.py` when memories ≥ 200. Merges/deduplicates
-entries, re-exports `long-term-memory.md`, and VACUUMs memory.db.
+**`hooks/memory/distill.py`** — memory consolidation. Triggered
+when memories ≥ 200. Merges/deduplicates, re-exports files.
 
 **`hooks/memory/remind_search.py`** — `userPromptSubmit`: emits
-a `<memory-reminder>` context entry nudging the agent to search
-`fungus-memory` when the prompt is ambiguous.
+`<memory-reminder>` nudging the agent to search when ambiguous.
 
-**`hooks/audit/on_pre_tool.py`** — `preToolUse`: queries
-`events.db` for consecutive `postToolUse` failures of the same
-tool in the current turn. Emits `<audit-reminder>` when the
-streak reaches 3.
-
-**`prompts/parse-criteria.md`** — the extract worker's
-operating manual: what to keep, what to drop, and the entry
-format.
-
-**`data/long-term-memory.md`** — append-only Markdown export,
-indexed as the `fungus-memory` knowledge base. Materialized
-view for KB indexing, not the source of truth.
+**`prompts/extract-criteria.md`** — the extraction prompt with
+9 directions, each with independent keep/drop criteria and
+structured JSON output format.
 
 ### Database schemas
 
@@ -116,13 +132,13 @@ view for KB indexing, not the source of truth.
 CREATE TABLE events (
     id INTEGER PRIMARY KEY,  -- time.time_ns()
     session_id TEXT NOT NULL,
-    hook TEXT NOT NULL,       -- agentSpawn/userPromptSubmit/preToolUse/postToolUse/stop
+    hook TEXT NOT NULL,
     cwd TEXT,
-    prompt TEXT,             -- userPromptSubmit only
-    tool_name TEXT,          -- preToolUse/postToolUse only
-    tool_success INTEGER,    -- postToolUse only (1/0)
-    tool_error TEXT,         -- postToolUse only (on failure)
-    response TEXT            -- stop only
+    prompt TEXT,
+    tool_name TEXT,
+    tool_success INTEGER,
+    tool_error TEXT,
+    response TEXT
 );
 ```
 
@@ -134,8 +150,9 @@ CREATE TABLE memories (
     summary TEXT NOT NULL,
     detail TEXT,
     tags TEXT,
+    category TEXT,           -- one of 9 directions
     created_at TEXT NOT NULL,
-    source_event_id INTEGER  -- links to events.id (the userPromptSubmit)
+    source_event_id INTEGER
 );
 
 CREATE TABLE meta (
@@ -144,9 +161,26 @@ CREATE TABLE meta (
 );
 ```
 
+### Output files
+
+```
+$KIRO_HOME/skills/fungus/data/
+├── events.db                  # raw hook events
+├── memory.db                  # memories + meta
+├── memory-semantic.md         # KB: facts, knowledge
+├── memory-episodic.md         # KB: events, lessons
+├── memory-autobiographical.md # KB: identity, relationships
+├── memory-procedural.md       # Prompt: skills, habits, reflexes, meta, prospective, emotional
+└── long-term-memory.md        # Legacy combined (backward compat)
+```
+
+Declarative categories get individual KB files for targeted
+retrieval. Non-declarative categories are combined into one
+prompt file for injection.
+
 ### Turn derivation
 
-A turn is not stored explicitly. It is derived from events:
+A turn is derived from events, not stored explicitly:
 
 ```
 Turn = all events between a userPromptSubmit and the next
@@ -154,42 +188,41 @@ Turn = all events between a userPromptSubmit and the next
        exists in that range.
 ```
 
-### Runtime files
-
-```
-$KIRO_HOME/skills/fungus/data/
-├── events.db              # raw hook events (WAL mode)
-├── memory.db              # memories + meta (WAL mode)
-└── long-term-memory.md    # KB-indexed export
-```
-
 ## Design decisions
 
-**Event-sourced.** Router writes once, hooks read. No UPDATE,
-no status flow, no cross-hook data passing. Each hook event is
-an immutable fact.
+**Event-sourced.** Router writes once, hooks read. Each hook
+event is an immutable fact.
 
-**Two separate databases.** events.db is owned by the router
-(write-only, append-only). memory.db is owned by the memory
-pipeline. Separation of concerns; either can be deleted
+**Two separate databases.** events.db (router-owned, append-only)
+and memory.db (memory-pipeline-owned). Either can be deleted
 independently.
 
 **Turn derived, not stored.** No turns table. A turn is a SQL
-query over events. This eliminates status columns, UPDATE
-operations, and the complexity of tracking turn lifecycle.
+query over events.
+
+**Multi-direction extraction.** One LLM call per turn evaluates
+9 cognitive directions independently. Each direction has its own
+keep/drop criteria. Cost is the same as a single-direction call
+(one API invocation), but extraction quality is higher because
+the LLM is forced to evaluate from multiple angles.
+
+**Category-split output.** Declarative memories go to KB files
+(on-demand retrieval). Non-declarative memories go to a prompt
+file (always active). This mirrors the cognitive distinction:
+declarative = "what you know", non-declarative = "how you behave".
+
+**Skill graduation.** Non-declarative memories are the upstream
+of skills. When procedural knowledge consolidates sufficiently
+through distill cycles, it can graduate into a SKILL.md. This
+is the memory system's consolidation process.
 
 **24h event retention.** Events older than 24h are deleted
-(unless linked to a memory). This bounds DB size without
-losing anything valuable — kept turns are preserved in
-memories, dropped turns are forgotten by design.
+(unless linked to a memory).
 
-**Drop markers cleaned with events.** When an event is deleted,
-its `dropped_<id>` meta entry is also removed, preventing
-unbounded meta table growth.
+**Drop markers cleaned with events.** Prevents unbounded meta
+table growth.
 
-**VACUUM only when rows deleted.** Avoids unnecessary IO on
-every stop.
+**VACUUM only when rows deleted.** Avoids unnecessary IO.
 
-**Memory is a property, not a skill.** There is no `SKILL.md`,
-no description to match, no user-facing trigger. Memory is part
-of what Fungus is, like the router or the system prompt.
+**Memory is a property, not a skill.** No SKILL.md, no trigger.
+Memory is part of what Fungus is.
