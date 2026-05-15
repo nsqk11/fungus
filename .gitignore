@@ -1,25 +1,10 @@
-# Runtime data (not tracked)
-**/data/memory.db
-**/data/memory.md
-**/data/long-term-memory.md
-**/data/turn-*.txt
-**/data/audit.db
-**/data/audit/
-**/data/store.db
-**/data/workbenches/
+# Hidden files and directories (runtime data, caches)
+.*
+!.gitignore
 
-# Cloned knowledge bases (provisioned by install.sh)
-knowledgeBase/styleguide/
-knowledgeBase/design-patterns-for-humans/
+# Generated
+memory/
 
-# Python artifacts
+# Python
 __pycache__/
 *.pyc
-*.pyo
-.pytest_cache/
-
-# Editor artifacts
-.vscode/
-.idea/
-*.swp
-.DS_Store

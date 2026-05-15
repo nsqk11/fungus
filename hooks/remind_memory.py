@@ -1,7 +1,8 @@
-#!/usr/bin/env python3.12
+#!/usr/bin/env python3
 # @hook userPromptSubmit
 # @priority 20
-# @description Remind the agent to consult the fungus-memory KB when unsure.
+# @description Remind the agent to search fungus-memory KB when unsure.
+"""Emit a memory-reminder context injection."""
 
 
 def main() -> None:

@@ -1,23 +1,20 @@
-#!/usr/bin/env python3.12
-"""Router — route hook events to skill scripts and global hooks.
+#!/usr/bin/env python3
+"""Hook event router for the Fungus agent.
 
-Reads hook payload from stdin, extracts `hook_event_name`, then scans
-`skills/*/scripts/*.{sh,py}` and `hooks/*.{sh,py}` for matching
-`@hook` annotations and executes them in priority order. Each script
-receives the original stdin payload unchanged, plus `FUNGUS_ROOT`
-in its environment pointing at the repo/install root.
+Receives hook payloads from Kiro via stdin, persists them as events,
+then dispatches to matching handler scripts sorted by priority.
 
-Usage:
-  Kiro invokes this as the registered hook handler. Not called directly.
+Each handler script declares its hook binding via annotations in the
+first 15 lines:
 
-Annotations (first 15 lines of each script):
-  # @hook <event-name>       required
-  # @priority <integer>      required, lower runs first
-  # @skill <name>            required for skill scripts, optional for hooks/
-  # @description <text>      required
+    # @hook <event-name>[,<event-name>...]   required
+    # @priority <integer>                    required (lower runs first)
+    # @description <text>                    required
+
+The router sets these environment variables before calling handlers:
+    FUNGUS_ROOT      — absolute path to the Fungus install directory
+    FUNGUS_EVENT_ID  — the event ID assigned to this hook invocation
 """
-
-from __future__ import annotations
 
 import json
 import os
@@ -25,109 +22,113 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-HOOKS_DIR = REPO_ROOT / "hooks"
-SKILLS_DIR = REPO_ROOT / "skills"
-_REQUIRED_KEYS = frozenset({"hook", "priority", "description"})
-_MAX_SCAN_LINES = 15
+_ROOT = Path(__file__).resolve().parent.parent
+_HOOKS_DIR = _ROOT / "hooks"
+_SKILLS_DIR = _ROOT / "skills"
+
+_REQUIRED_ANNOTATIONS = frozenset({"hook", "priority", "description"})
+_ANNOTATION_SCAN_LINES = 15
 
 
-def _read_hook_name(payload: str) -> str:
-    """Extract hook_event_name from JSON payload. Empty on failure."""
+def _parse_hook_name(payload: str) -> str:
+    """Extract hook_event_name from a JSON payload string."""
     try:
         return json.loads(payload).get("hook_event_name", "")
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, AttributeError):
         return ""
 
 
 def _parse_annotations(path: Path) -> dict[str, str] | None:
-    """Return annotations dict if all required keys are present."""
+    """Parse @-annotations from the first lines of a script.
+
+    Returns:
+        A dict of annotation key->value if all required keys are present,
+        or None otherwise.
+    """
     annotations: dict[str, str] = {}
     with path.open() as f:
-        for _, line in zip(range(_MAX_SCAN_LINES), f):
+        for _, line in zip(range(_ANNOTATION_SCAN_LINES), f):
             stripped = line.strip()
             if stripped.startswith("# @"):
                 key, _, value = stripped[3:].partition(" ")
                 annotations[key] = value.strip()
-    return annotations if _REQUIRED_KEYS <= annotations.keys() else None
+    if _REQUIRED_ANNOTATIONS <= annotations.keys():
+        return annotations
+    return None
 
 
-def _iter_scripts() -> list[Path]:
-    """Yield candidate scripts from hooks/, hooks/*/, and skills/*/scripts/."""
+def _matches_hook(annotation: str, hook: str) -> bool:
+    """Check if a hook annotation matches the current hook event."""
+    return annotation == "*" or hook in annotation.split(",")
+
+
+def _discover_scripts() -> list[Path]:
+    """Discover candidate handler scripts in hooks/ and skills/."""
     scripts: list[Path] = []
-    if HOOKS_DIR.is_dir():
-        # Top-level hooks (router.py excluded).
-        for p in HOOKS_DIR.iterdir():
-            if p.is_file() and p.suffix in (".py", ".sh") \
-                    and not p.name.startswith("_"):
-                if p.name != "router.py":
-                    scripts.append(p)
-        # One level of grouped hooks: hooks/<group>/*.{py,sh}
-        for p in HOOKS_DIR.glob("*/*"):
+    if _HOOKS_DIR.is_dir():
+        for p in _HOOKS_DIR.iterdir():
+            if (p.is_file() and p.suffix in (".py", ".sh")
+                    and not p.name.startswith("_")
+                    and p.name != Path(__file__).name):
+                scripts.append(p)
+        for p in _HOOKS_DIR.glob("*/*"):
             if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
                 scripts.append(p)
-    if SKILLS_DIR.is_dir():
-        for p in SKILLS_DIR.glob("*/scripts/*"):
+    if _SKILLS_DIR.is_dir():
+        for p in _SKILLS_DIR.glob("*/scripts/*"):
             if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
                 scripts.append(p)
     return scripts
 
 
-def _resolve(hook: str) -> list[tuple[Path, str]]:
-    """Return (script_path, label) pairs matching hook, sorted by priority."""
-    matches: list[tuple[int, Path, str]] = []
-    for script in _iter_scripts():
+def _resolve_handlers(hook: str) -> list[Path]:
+    """Return handler scripts matching the hook, sorted by priority."""
+    matches: list[tuple[int, Path]] = []
+    for script in _discover_scripts():
         ann = _parse_annotations(script)
-        if ann is None or ann["hook"] != hook:
+        if ann is None or not _matches_hook(ann["hook"], hook):
             continue
         try:
             priority = int(ann["priority"])
         except ValueError:
             continue
-        label = ann.get("skill", "hooks")
-        matches.append((priority, script, label))
-
+        matches.append((priority, script))
     matches.sort(key=lambda m: m[0])
-    return [(path, label) for _, path, label in matches]
+    return [path for _, path in matches]
 
 
-def _run(script: Path, payload: str) -> None:
-    """Forward payload to script via stdin."""
-    runner = "python3.12" if script.suffix == ".py" else "bash"
-    # Label for diagnostics:
-    #   skills/<name>/scripts/x.py  -> <name>
-    #   hooks/<group>/x.py          -> <group>
-    #   hooks/x.py                  -> hooks
-    if script.parent.name == "scripts":
-        label = script.parent.parent.name
-    elif script.parent.parent == HOOKS_DIR:
-        label = script.parent.name
-    else:
-        label = "hooks"
-    print(f"[router] → {script.name} ({label})", file=sys.stderr)
-    subprocess.run([runner, str(script)], input=payload, text=True, check=False)
+def _execute(script: Path, payload: str) -> None:
+    """Execute a handler script, forwarding the payload via stdin."""
+    subprocess.run([str(script)], input=payload, text=True, check=False)
 
 
 def main() -> None:
+    """Read payload from stdin, store event, dispatch to handlers."""
     if sys.stdin.isatty():
         return
     payload = sys.stdin.read()
     if not payload:
         return
 
-    os.environ["FUNGUS_ROOT"] = str(REPO_ROOT)
+    os.environ["FUNGUS_ROOT"] = str(_ROOT)
 
-    hook = _read_hook_name(payload)
+    hook = _parse_hook_name(payload)
     if not hook:
         return
 
-    # Store raw event before dispatching to hooks
-    sys.path.insert(0, str(HOOKS_DIR / "memory"))
-    from _db import insert_event
-    insert_event(hook, json.loads(payload))
+    # Persist the raw event.
+    sys.path.insert(0, str(_HOOKS_DIR))
+    from _event import insert_event, cleanup
+    event_id = insert_event(hook, json.loads(payload))
+    os.environ["FUNGUS_EVENT_ID"] = str(event_id)
 
-    for script, _label in _resolve(hook):
-        _run(script, payload)
+    # Housekeeping on session start.
+    if hook == "agentSpawn":
+        cleanup()
+
+    # Dispatch to matching handlers.
+    for script in _resolve_handlers(hook):
+        _execute(script, payload)
 
 
 if __name__ == "__main__":
