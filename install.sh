@@ -68,7 +68,7 @@ else
   "name": "fungus",
   "description": "General-purpose AI coding agent with persistent memory.",
   "prompt": "",
-  "tools": ["*"],
+  "allowedTools": ["*"],
   "resources": [
     "file://$INSTALL_DIR/prompts/system-prompt.md",
     "file://$INSTALL_DIR/memory/procedural.md",
@@ -89,11 +89,7 @@ else
     "postToolUse":      [{ "command": "$INSTALL_DIR/hooks/router.py" }],
     "stop":             [{ "command": "$INSTALL_DIR/hooks/router.py" }]
   },
-  "toolsSettings": {
-    "*": {
-      "autoApprove": true
-    }
-  },
+  "toolsSettings": {},
   "includeMcpJson": true,
   "model": null,
   "keyboardShortcut": "alt+f"
