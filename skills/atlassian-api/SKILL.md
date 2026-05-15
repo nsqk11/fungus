@@ -36,9 +36,9 @@ fetching. Everything else should be written by the agent using
 Run scripts from the skill directory. The primary interface is the CLI:
 
 ```
-python3.12 scripts/cli.py <command> [args...]
-python3.12 scripts/cli.py --help
-python3.12 scripts/cli.py <command> --help
+scripts/cli.py <command> [args...]
+scripts/cli.py --help
+scripts/cli.py <command> --help
 ```
 
 ### `fetch <url>` — primary entry
@@ -46,10 +46,10 @@ python3.12 scripts/cli.py <command> --help
 Hand the skill any Atlassian URL; it will classify and dispatch:
 
 ```
-python3.12 scripts/cli.py fetch <url>
-python3.12 scripts/cli.py fetch <url> --format json
-python3.12 scripts/cli.py fetch <url> --refresh          # force re-fetch
-python3.12 scripts/cli.py fetch <url> --full             # all Jira comments
+scripts/cli.py fetch <url>
+scripts/cli.py fetch <url> --format json
+scripts/cli.py fetch <url> --refresh          # force re-fetch
+scripts/cli.py fetch <url> --full             # all Jira comments
 ```
 
 Supported URL patterns (no hardcoded domains; path-based):
@@ -63,15 +63,15 @@ Supported URL patterns (no hardcoded domains; path-based):
 When you already know the kind of resource:
 
 ```
-python3.12 scripts/cli.py page  <domain> <pageId>   [--format text|json|html] [--refresh]
-python3.12 scripts/cli.py issue <domain> <issueKey> [--format text|json]      [--full]
+scripts/cli.py page  <domain> <pageId>   [--format text|json|html] [--refresh]
+scripts/cli.py issue <domain> <issueKey> [--format text|json]      [--full]
 ```
 
 ### Search and sync
 
 ```
-python3.12 scripts/cli.py search <query> [--domain <d>] [--title-only] [--limit N]
-python3.12 scripts/cli.py sync   <domain> <spaceKey>
+scripts/cli.py search <query> [--domain <d>] [--title-only] [--limit N]
+scripts/cli.py sync   <domain> <spaceKey>
 ```
 
 `search` runs FTS5 over cached `title + body_text`. `sync` pulls page
@@ -81,10 +81,10 @@ so that title searches find pages that haven't been individually fetched.
 ### Token management
 
 ```
-python3.12 scripts/cli.py token list
-python3.12 scripts/cli.py token set    <domain> <pat>
-python3.12 scripts/cli.py token remove <domain>
-python3.12 scripts/cli.py token test   <domain>
+scripts/cli.py token list
+scripts/cli.py token set    <domain> <pat>
+scripts/cli.py token remove <domain>
+scripts/cli.py token test   <domain>
 ```
 
 `token list` shows each domain with its last-tested timestamp and status

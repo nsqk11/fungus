@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.12
+#!/usr/bin/env python3
 """project-workbench — per-project lifecycle metadata CLI.
 
 One JSON file per project lives under ``data/workbenches/<id>.json``.

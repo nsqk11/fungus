@@ -22,7 +22,7 @@ PM tools, replace a todo list, or handle secrets.
 ## CLI
 
 ```
-python3.12 skills/project-workbench/scripts/cli.py <command> [args...]
+skills/project-workbench/scripts/cli.py <command> [args...]
 ```
 
 `<id>` accepts any unique prefix after `init`.

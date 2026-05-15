@@ -40,6 +40,7 @@ done
 # Make scripts executable
 find "$INSTALL_DIR/hooks" -name "*.py" -not -name "_*" -exec chmod +x {} +
 find "$INSTALL_DIR/hooks" -name "*.sh" -exec chmod +x {} +
+find "$INSTALL_DIR/skills" -path "*/scripts/cli.py" -exec chmod +x {} +
 
 # Clone/update anthropics community skills
 COMMUNITY_SKILLS_DIR="$INSTALL_DIR/.cache/anthropics-skills"
