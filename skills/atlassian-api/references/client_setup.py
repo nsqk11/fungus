@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.12
+#!/usr/bin/env python3
 """Template: write your own Atlassian API code using atlassian-python-api.
 
 Read this file when you need an operation that the ``atlassian-api`` skill
