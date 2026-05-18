@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Memory store: SQLite persistence for extracted memories.
 
-Provides save, drop-marking, and export for the memory.db database.
+Provides save, export, and session-processing tracking.
 """
 
 import os
 import sqlite3
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 _ROOT = Path(os.environ.get("FUNGUS_ROOT", Path(__file__).resolve().parent.parent))
@@ -37,20 +37,68 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS processed_sessions (
+    session_id TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    memory_count INTEGER DEFAULT 0
+);
 """
 
 
 def get_conn() -> sqlite3.Connection:
-    """Open a connection to memory.db, creating schema if needed."""
     conn = sqlite3.connect(str(MEMORY_DB), timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
     return conn
 
 
-def save_memories(entries: list[dict], event_id: int) -> None:
-    """Save extracted memories to DB and re-export files."""
+# --- Session tracking -----------------------------------------------------
+
+
+def claim_session(session_id: str) -> bool:
+    """Try to claim a session for processing. Returns True if claimed."""
+    now = datetime.now(timezone.utc).isoformat()
     conn = get_conn()
+    conn.execute(
+        "INSERT OR IGNORE INTO processed_sessions (session_id, started_at) VALUES (?, ?)",
+        (session_id, now),
+    )
+    claimed = conn.execute("SELECT changes()").fetchone()[0] == 1
+    conn.commit()
+    conn.close()
+    return claimed
+
+
+def finish_session(session_id: str, memory_count: int) -> None:
+    """Mark a session as finished."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    conn.execute(
+        "UPDATE processed_sessions SET finished_at = ?, memory_count = ? WHERE session_id = ?",
+        (now, memory_count, session_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_processed(session_id: str) -> bool:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM processed_sessions WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+# --- Memory save/export ---------------------------------------------------
+
+
+def save_memories(entries: list[dict], source_id: int = 0) -> int:
+    """Save extracted memories to DB and re-export files. Returns count saved."""
+    conn = get_conn()
+    count = 0
     for entry in entries:
         cat = entry.get("category", "").lower()
         if cat not in CATEGORIES:
@@ -58,22 +106,13 @@ def save_memories(entries: list[dict], event_id: int) -> None:
         conn.execute(
             "INSERT INTO memories (summary, detail, tags, category, source_event_id)"
             " VALUES (?, ?, ?, ?, ?)",
-            (entry["summary"], entry.get("detail", ""), entry.get("tags", ""), cat, event_id),
+            (entry["summary"], entry.get("detail", ""), entry.get("tags", ""), cat, source_id),
         )
+        count += 1
     conn.commit()
     conn.close()
     export()
-
-
-def mark_dropped(event_id: int) -> None:
-    """Mark a turn as dropped (nothing worth extracting)."""
-    conn = get_conn()
-    conn.execute(
-        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')",
-        (f"dropped_{event_id}",),
-    )
-    conn.commit()
-    conn.close()
+    return count
 
 
 def export() -> None:
@@ -91,7 +130,7 @@ def export() -> None:
 
     for summary, detail, tags, category, created_at in rows:
         cat = category or "semantic"
-        entry_date = created_at[:10] if created_at else date.today().isoformat()
+        entry_date = created_at[:10] if created_at else datetime.now().strftime("%Y-%m-%d")
         md = f"## {summary}\n\nDate: {entry_date} | Tags: {tags}\n"
         if detail:
             md += f"\n{detail}\n"
@@ -102,7 +141,6 @@ def export() -> None:
         else:
             declarative["semantic"].append(md)
 
-    # Write declarative KB files.
     for cat, entries in declarative.items():
         path = _MEMORY_DIR / f"memory-{cat}.md"
         if entries:
@@ -113,7 +151,6 @@ def export() -> None:
         else:
             path.unlink(missing_ok=True)
 
-    # Write non-declarative prompt file.
     nd_sections = []
     for cat, entries in non_declarative.items():
         if entries:
@@ -126,3 +163,32 @@ def export() -> None:
         )
     else:
         nd_path.unlink(missing_ok=True)
+
+
+# --- CLI entry point (for worker agent) -----------------------------------
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    usage = "Usage: _memory.py save '<json_array>' [session_id]\n       _memory.py finish <session_id> <count>"
+
+    if len(sys.argv) < 2:
+        print(usage)
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+    if cmd == "save" and len(sys.argv) >= 3:
+        entries = json.loads(sys.argv[2])
+        if not isinstance(entries, list):
+            entries = [entries]
+        session_id = sys.argv[3] if len(sys.argv) > 3 else ""
+        count = save_memories(entries, 0)
+        print(f"Saved {count} memories.")
+    elif cmd == "finish" and len(sys.argv) >= 4:
+        finish_session(sys.argv[2], int(sys.argv[3]))
+        print(f"Session {sys.argv[2]} marked finished.")
+    else:
+        print(usage)
+        sys.exit(1)

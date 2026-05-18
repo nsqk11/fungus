@@ -2,35 +2,53 @@
 # @hook preToolUse
 # @priority 10
 # @description Warn the agent after consecutive tool failures.
-"""Track tool failures and emit a warning after 3 consecutive failures."""
+"""Read current session .jsonl to detect consecutive tool failures."""
 
 import json
 import os
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _event import get_conn
-
+_SESSIONS_DIR = Path.home() / ".kiro" / "sessions" / "cli"
 _THRESHOLD = 3
 
 
 def main() -> None:
-    if sys.stdin.isatty():
+    session_id = os.environ.get("KIRO_SESSION_ID", "")
+    if not session_id:
         return
-    payload = json.loads(sys.stdin.read())
-    session_id = os.environ.get("KIRO_SESSION_ID", "default")
 
-    conn = get_conn()
-    recent = conn.execute(
-        "SELECT tool_success FROM events"
-        " WHERE session_id = ? AND hook = 'postToolUse'"
-        " ORDER BY id DESC LIMIT ?",
-        (session_id, _THRESHOLD),
-    ).fetchall()
-    conn.close()
+    jsonl = _SESSIONS_DIR / f"{session_id}.jsonl"
+    if not jsonl.exists():
+        return
 
-    if len(recent) >= _THRESHOLD and all(r[0] == 0 for r in recent):
+    # Read last N ToolResults lines from the end
+    tool_results = []
+    with jsonl.open(encoding="utf-8") as f:
+        for line in f:
+            try:
+                obj = json.loads(line)
+                if obj.get("kind") == "ToolResults":
+                    tool_results.append(obj)
+            except json.JSONDecodeError:
+                continue
+
+    # Check last _THRESHOLD tool results for failures
+    recent = tool_results[-_THRESHOLD:]
+    if len(recent) < _THRESHOLD:
+        return
+
+    all_failed = True
+    for tr in recent:
+        results = tr.get("data", {}).get("results", {})
+        for tool_id, result in results.items():
+            status = result.get("tool", {}).get("status", "success")
+            if status == "success":
+                all_failed = False
+                break
+        if not all_failed:
+            break
+
+    if all_failed:
         print(
             "<failure-warning>\n"
             f"Last {_THRESHOLD} tool calls failed. "
