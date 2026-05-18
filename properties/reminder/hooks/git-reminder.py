@@ -34,10 +34,19 @@ def main() -> None:
     # If pushing without explicit host, resolve the remote URL
     if is_push and not is_external:
         import subprocess
+        # Determine cwd: use working_dir from tool_input, or try to extract
+        # from a "cd <dir> &&" prefix in the command string
+        raw_input = data.get("tool_input", {})
+        cwd = raw_input.get("working_dir") if isinstance(raw_input, dict) else None
+        if not cwd:
+            cmd_str = raw_input.get("command", "") if isinstance(raw_input, dict) else ""
+            if cmd_str.startswith("cd ") and "&&" in cmd_str:
+                cwd = cmd_str.split("&&")[0].replace("cd ", "").strip()
         try:
             url = subprocess.check_output(
                 ["git", "remote", "get-url", "origin"],
-                stderr=subprocess.DEVNULL, text=True
+                stderr=subprocess.DEVNULL, text=True,
+                cwd=cwd or None
             ).lower()
             is_external = any(h in url for h in _EXTERNAL_HOSTS)
         except Exception:
