@@ -74,6 +74,9 @@ Do NOT extract if ANY apply:
 4. No concrete trigger scenario
 5. Implementation detail in the code itself
 6. Trivial routine task
+7. Fungus's own architecture, internals, or implementation (skills, hooks,
+   memory pipeline, prompt structure) — the agent already has access to
+   these via source; recording them as memories adds noise
 
 ### Output Format
 

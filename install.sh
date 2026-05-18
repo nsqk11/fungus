@@ -88,8 +88,6 @@ else
   "allowedTools": ["*"],
   "resources": [
     "file://$INSTALL_DIR/prompts/system-prompt.md",
-    "file://$INSTALL_DIR/properties/memory/memory.md",
-    "file://$INSTALL_DIR/properties/reminder/reminder.md",
     "skill://$KIRO_HOME/skills/**/SKILL.md",
     {
       "type": "knowledgeBase",
