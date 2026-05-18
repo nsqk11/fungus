@@ -31,6 +31,18 @@ def main() -> None:
     is_push = any(k in tool_input for k in _PUSH_KEYWORDS)
     is_external = any(h in tool_input for h in _EXTERNAL_HOSTS)
 
+    # If pushing without explicit host, resolve the remote URL
+    if is_push and not is_external:
+        import subprocess
+        try:
+            url = subprocess.check_output(
+                ["git", "remote", "get-url", "origin"],
+                stderr=subprocess.DEVNULL, text=True
+            ).lower()
+            is_external = any(h in url for h in _EXTERNAL_HOSTS)
+        except Exception:
+            pass
+
     if is_push and is_external:
         print(
             "<git-push-warning>\n"
