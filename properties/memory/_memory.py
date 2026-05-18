@@ -9,24 +9,19 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ROOT = Path(os.environ.get("FUNGUS_ROOT", Path(__file__).resolve().parent.parent))
-MEMORY_DB = _ROOT / ".memory.db"
-_MEMORY_DIR = _ROOT / "memory"
+_ROOT = Path(os.environ.get("FUNGUS_ROOT", Path(__file__).resolve().parent.parent.parent))
+_PROP_DIR = Path(__file__).resolve().parent
+MEMORY_DB = _PROP_DIR / "memory.db"
+_MEMORY_DIR = _PROP_DIR / "data"
 
-CATEGORIES = (
-    "semantic", "episodic", "autobiographical",
-    "skill", "habit", "reflex", "metacognitive",
-    "prospective", "emotional",
-)
-
-DECLARATIVE = ("semantic", "episodic", "autobiographical")
-NON_DECLARATIVE = ("skill", "habit", "reflex", "metacognitive", "prospective", "emotional")
+CATEGORIES = ("correction", "preference", "discovery", "decision")
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS memories (
     id INTEGER PRIMARY KEY,
     summary TEXT NOT NULL,
     detail TEXT,
+    trigger TEXT,
     tags TEXT,
     category TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
@@ -51,6 +46,10 @@ def get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(MEMORY_DB), timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
+    # Migration: add trigger column if missing
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(memories)").fetchall()}
+    if "trigger" not in cols:
+        conn.execute("ALTER TABLE memories ADD COLUMN trigger TEXT")
     return conn
 
 
@@ -129,9 +128,10 @@ def save_memories(entries: list[dict], source_id: int = 0) -> int:
         if cat not in CATEGORIES:
             continue
         conn.execute(
-            "INSERT INTO memories (summary, detail, tags, category, source_event_id)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (entry["summary"], entry.get("detail", ""), entry.get("tags", ""), cat, source_id),
+            "INSERT INTO memories (summary, detail, trigger, tags, category, source_event_id)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (entry["summary"], entry.get("detail", ""), entry.get("trigger", ""),
+             entry.get("tags", ""), cat, source_id),
         )
         count += 1
     conn.commit()
@@ -141,7 +141,7 @@ def save_memories(entries: list[dict], source_id: int = 0) -> int:
 
 
 def export() -> None:
-    """Export all memories to category-split .md files for KB indexing."""
+    """Export memories to per-category .md files for KB indexing."""
     conn = get_conn()
     rows = conn.execute(
         "SELECT summary, detail, tags, category, created_at FROM memories ORDER BY id"
@@ -150,44 +150,26 @@ def export() -> None:
 
     _MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
-    declarative: dict[str, list[str]] = {c: [] for c in DECLARATIVE}
-    non_declarative: dict[str, list[str]] = {c: [] for c in NON_DECLARATIVE}
+    sections: dict[str, list[str]] = {c: [] for c in CATEGORIES}
 
     for summary, detail, tags, category, created_at in rows:
-        cat = category or "semantic"
+        cat = category if category in CATEGORIES else "discovery"
         entry_date = created_at[:10] if created_at else datetime.now().strftime("%Y-%m-%d")
         md = f"## {summary}\n\nDate: {entry_date} | Tags: {tags}\n"
         if detail:
             md += f"\n{detail}\n"
-        if cat in declarative:
-            declarative[cat].append(md)
-        elif cat in non_declarative:
-            non_declarative[cat].append(md)
-        else:
-            declarative["semantic"].append(md)
+        sections[cat].append(md)
 
-    for cat, entries in declarative.items():
-        path = _MEMORY_DIR / f"memory-{cat}.md"
-        if entries:
-            path.write_text(
-                f"# Fungus Memory — {cat.title()}\n\n" + "\n".join(entries),
-                encoding="utf-8",
-            )
+    for cat in CATEGORIES:
+        out_path = _MEMORY_DIR / f"memory-{cat}.md"
+        if sections[cat]:
+            content = f"# {cat.title()}\n\n" + "\n".join(sections[cat])
+            out_path.write_text(content, encoding="utf-8")
         else:
-            path.unlink(missing_ok=True)
+            out_path.unlink(missing_ok=True)
 
-    nd_sections = []
-    for cat, entries in non_declarative.items():
-        if entries:
-            nd_sections.append(f"### {cat.title()}\n\n" + "\n".join(entries))
-    nd_path = _MEMORY_DIR / "procedural.md"
-    if nd_sections:
-        nd_path.write_text(
-            "# Fungus Memory — Non-declarative\n\n" + "\n".join(nd_sections),
-            encoding="utf-8",
-        )
-    else:
-        nd_path.unlink(missing_ok=True)
+    # Clean up old single file
+    (_MEMORY_DIR / "memories.md").unlink(missing_ok=True)
 
 
 # --- CLI entry point (for worker agent) -----------------------------------
@@ -197,7 +179,13 @@ if __name__ == "__main__":
     import json
     import sys
 
-    usage = "Usage: _memory.py save '<json_array>' [session_id]\n       _memory.py finish <session_id> <count>"
+    usage = (
+        "Usage:\n"
+        "  _memory.py save '<json_array>'\n"
+        "  _memory.py finish <session_id> <count>\n"
+        "  _memory.py list-unprocessed\n"
+        "  _memory.py list-existing"
+    )
 
     if len(sys.argv) < 2:
         print(usage)
@@ -208,12 +196,22 @@ if __name__ == "__main__":
         entries = json.loads(sys.argv[2])
         if not isinstance(entries, list):
             entries = [entries]
-        session_id = sys.argv[3] if len(sys.argv) > 3 else ""
         count = save_memories(entries, 0)
         print(f"Saved {count} memories.")
     elif cmd == "finish" and len(sys.argv) >= 4:
         finish_session(sys.argv[2], int(sys.argv[3]))
         print(f"Session {sys.argv[2]} marked finished.")
+    elif cmd == "list-unprocessed":
+        for sid in find_unprocessed():
+            print(sid)
+    elif cmd == "list-existing":
+        conn = get_conn()
+        rows = conn.execute("SELECT summary FROM memories ORDER BY id DESC LIMIT 50").fetchall()
+        conn.close()
+        for r in rows:
+            print(f"- {r[0]}")
+        if not rows:
+            print("(none)")
     else:
         print(usage)
         sys.exit(1)

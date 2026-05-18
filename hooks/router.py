@@ -20,7 +20,7 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 _HOOKS_DIR = _ROOT / "hooks"
-_SKILLS_DIR = _ROOT / "skills"
+_PROPERTIES_DIR = _ROOT / "properties"
 
 _REQUIRED_ANNOTATIONS = frozenset({"hook", "priority", "description"})
 _ANNOTATION_SCAN_LINES = 15
@@ -61,8 +61,8 @@ def _discover_scripts() -> list[Path]:
         for p in _HOOKS_DIR.glob("*/*"):
             if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
                 scripts.append(p)
-    if _SKILLS_DIR.is_dir():
-        for p in _SKILLS_DIR.glob("*/scripts/*"):
+    if _PROPERTIES_DIR.is_dir():
+        for p in _PROPERTIES_DIR.glob("*/hooks/*"):
             if p.suffix in (".py", ".sh") and not p.name.startswith("_"):
                 scripts.append(p)
     return scripts

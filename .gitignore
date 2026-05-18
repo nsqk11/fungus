@@ -1,9 +1,7 @@
-# Hidden files and directories (runtime data, caches)
-.*
-!.gitignore
-
-# Generated
-memory/
+# Runtime data
+properties/memory/memory.db
+properties/memory/data/
+skills/*/data/
 
 # Python
 __pycache__/

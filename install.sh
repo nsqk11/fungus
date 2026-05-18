@@ -17,9 +17,9 @@ python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>/de
   echo "Error: Python >= 3.10 required." >&2; exit 1
 }
 
-# Sync repo to install dir, preserving data/
+# Sync repo to install dir, preserving runtime data
 mkdir -p "$INSTALL_DIR"
-for dir in hooks prompts skills; do
+for dir in hooks prompts properties skills; do
   [ -d "$REPO_ROOT/$dir" ] || continue
   if [ "$dir" = "skills" ]; then
     mkdir -p "$INSTALL_DIR/$dir"
@@ -30,6 +30,22 @@ for dir in hooks prompts skills; do
       cp -r "$skill" "$dest"
       find "$dest" -type d \( -name __pycache__ -o -name tests -o -name .pytest_cache \) -exec rm -rf {} + 2>/dev/null || true
     done
+  elif [ "$dir" = "properties" ]; then
+    mkdir -p "$INSTALL_DIR/$dir"
+    for prop in "$REPO_ROOT/$dir"/*/; do
+      prop_name="$(basename "$prop")"
+      dest="$INSTALL_DIR/$dir/$prop_name"
+      # Preserve runtime data (memory.db, data/)
+      backup_db=""
+      backup_data=""
+      [ -f "$dest/memory.db" ] && backup_db="$(mktemp)" && cp "$dest/memory.db" "$backup_db"
+      [ -d "$dest/data" ] && backup_data="$(mktemp -d)" && cp -r "$dest/data/." "$backup_data/"
+      rm -rf "$dest"
+      cp -r "$prop" "$dest"
+      [ -n "$backup_db" ] && mv "$backup_db" "$dest/memory.db"
+      [ -n "$backup_data" ] && mkdir -p "$dest/data" && cp -r "$backup_data/." "$dest/data/" && rm -rf "$backup_data"
+      find "$dest" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    done
   else
     rm -rf "$INSTALL_DIR/$dir"
     cp -r "$REPO_ROOT/$dir" "$INSTALL_DIR/"
@@ -37,10 +53,10 @@ for dir in hooks prompts skills; do
   fi
 done
 
-# Make scripts executable
+# Make hook scripts executable
 find "$INSTALL_DIR/hooks" -name "*.py" -not -name "_*" -exec chmod +x {} +
-find "$INSTALL_DIR/hooks" -name "*.sh" -exec chmod +x {} +
-find "$INSTALL_DIR/skills" -path "*/scripts/cli.py" -exec chmod +x {} +
+find "$INSTALL_DIR/properties" -path "*/hooks/*.py" -exec chmod +x {} +
+find "$INSTALL_DIR/properties" -name "_memory.py" -exec chmod +x {} +
 
 # Clone/update anthropics community skills
 COMMUNITY_SKILLS_DIR="$INSTALL_DIR/.cache/anthropics-skills"
@@ -72,11 +88,12 @@ else
   "allowedTools": ["*"],
   "resources": [
     "file://$INSTALL_DIR/prompts/system-prompt.md",
-    "file://$INSTALL_DIR/memory/procedural.md",
+    "file://$INSTALL_DIR/properties/memory/memory.md",
+    "file://$INSTALL_DIR/properties/reminder/reminder.md",
     "skill://$KIRO_HOME/skills/**/SKILL.md",
     {
       "type": "knowledgeBase",
-      "source": "file://$INSTALL_DIR/memory",
+      "source": "file://$INSTALL_DIR/properties/memory/data",
       "name": "fungus-memory",
       "indexType": "best",
       "include": ["memory-*.md"],

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# @hook preToolUse
+# @hook postToolUse
 # @priority 10
-# @description Warn the agent after consecutive tool failures.
-"""Read current session .jsonl to detect consecutive tool failures."""
+# @description Warn after consecutive tool failures.
+"""Detect consecutive tool failures from session jsonl and inject warning."""
 
 import json
 import os
@@ -21,7 +21,6 @@ def main() -> None:
     if not jsonl.exists():
         return
 
-    # Read last N ToolResults lines from the end
     tool_results = []
     with jsonl.open(encoding="utf-8") as f:
         for line in f:
@@ -32,7 +31,6 @@ def main() -> None:
             except json.JSONDecodeError:
                 continue
 
-    # Check last _THRESHOLD tool results for failures
     recent = tool_results[-_THRESHOLD:]
     if len(recent) < _THRESHOLD:
         return
@@ -40,9 +38,8 @@ def main() -> None:
     all_failed = True
     for tr in recent:
         results = tr.get("data", {}).get("results", {})
-        for tool_id, result in results.items():
-            status = result.get("tool", {}).get("status", "success")
-            if status == "success":
+        for result in results.values():
+            if result.get("tool", {}).get("status", "success") == "success":
                 all_failed = False
                 break
         if not all_failed:
