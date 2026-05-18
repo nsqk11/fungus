@@ -119,7 +119,7 @@ def find_unprocessed() -> list[str]:
 # --- Memory save/export ---------------------------------------------------
 
 
-def save_memories(entries: list[dict], source_id: int = 0) -> int:
+def save_memories(entries: list[dict], source_id: int = 0, session_id: str = "") -> int:
     """Save extracted memories to DB and re-export files. Returns count saved."""
     conn = get_conn()
     count = 0
@@ -134,6 +134,11 @@ def save_memories(entries: list[dict], source_id: int = 0) -> int:
              entry.get("tags", ""), cat, source_id),
         )
         count += 1
+    if session_id:
+        conn.execute(
+            "UPDATE processed_sessions SET memory_count = memory_count + ? WHERE session_id = ?",
+            (count, session_id),
+        )
     conn.commit()
     conn.close()
     export()
@@ -181,8 +186,8 @@ if __name__ == "__main__":
 
     usage = (
         "Usage:\n"
-        "  _memory.py save '<json_array>'\n"
-        "  _memory.py finish <session_id> <count>\n"
+        "  _memory.py save '<json_array>' [session_id]\n"
+        "  _memory.py finish <session_id> [count]\n"
         "  _memory.py list-unprocessed\n"
         "  _memory.py list-existing"
     )
@@ -196,10 +201,12 @@ if __name__ == "__main__":
         entries = json.loads(sys.argv[2])
         if not isinstance(entries, list):
             entries = [entries]
-        count = save_memories(entries, 0)
+        sid = sys.argv[3] if len(sys.argv) >= 4 else ""
+        count = save_memories(entries, 0, session_id=sid)
         print(f"Saved {count} memories.")
-    elif cmd == "finish" and len(sys.argv) >= 4:
-        finish_session(sys.argv[2], int(sys.argv[3]))
+    elif cmd == "finish" and len(sys.argv) >= 3:
+        mc = int(sys.argv[3]) if len(sys.argv) >= 4 else 0
+        finish_session(sys.argv[2], mc)
         print(f"Session {sys.argv[2]} marked finished.")
     elif cmd == "list-unprocessed":
         for sid in find_unprocessed():

@@ -95,13 +95,13 @@ Do NOT extract if ANY apply:
 ## Step 5: Save memories
 
 ```bash
-~/.kiro/skills/fungus/properties/memory/_memory.py save '<json_array>'
+~/.kiro/skills/fungus/properties/memory/_memory.py save '<json_array>' '<session_id>'
 ```
 
 ## Step 6: Mark session finished
 
 ```bash
-~/.kiro/skills/fungus/properties/memory/_memory.py finish '<session_id>' <count>
+~/.kiro/skills/fungus/properties/memory/_memory.py finish '<session_id>'
 ```
 
 If nothing worth extracting, still mark finished with count 0.
