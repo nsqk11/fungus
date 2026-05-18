@@ -57,15 +57,28 @@ def get_conn() -> sqlite3.Connection:
 # --- Session tracking -----------------------------------------------------
 
 
-def claim_session(session_id: str) -> bool:
-    """Try to claim a session for processing. Returns True if claimed."""
+def register_session(session_id: str) -> None:
+    """Register a session as known (not yet processed)."""
     now = datetime.now(timezone.utc).isoformat()
     conn = get_conn()
     conn.execute(
         "INSERT OR IGNORE INTO processed_sessions (session_id, started_at) VALUES (?, ?)",
         (session_id, now),
     )
-    claimed = conn.execute("SELECT changes()").fetchone()[0] == 1
+    conn.commit()
+    conn.close()
+
+
+def claim_session(session_id: str) -> bool:
+    """Try to claim a session for processing. Returns True if claimed."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    # Only claim sessions that are registered but not yet started processing
+    cur = conn.execute(
+        "UPDATE processed_sessions SET started_at = ? WHERE session_id = ? AND finished_at IS NULL",
+        (now, session_id),
+    )
+    claimed = cur.rowcount == 1
     conn.commit()
     conn.close()
     return claimed
@@ -84,12 +97,24 @@ def finish_session(session_id: str, memory_count: int) -> None:
 
 
 def is_processed(session_id: str) -> bool:
+    """True if session has been fully processed (finished_at is set)."""
     conn = get_conn()
     row = conn.execute(
-        "SELECT 1 FROM processed_sessions WHERE session_id = ?", (session_id,)
+        "SELECT 1 FROM processed_sessions WHERE session_id = ? AND finished_at IS NOT NULL",
+        (session_id,),
     ).fetchone()
     conn.close()
     return row is not None
+
+
+def find_unprocessed() -> list[str]:
+    """Find session IDs registered in DB but not yet finished."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT session_id FROM processed_sessions WHERE finished_at IS NULL"
+    ).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
 
 
 # --- Memory save/export ---------------------------------------------------

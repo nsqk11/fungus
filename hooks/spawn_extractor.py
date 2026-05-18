@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# @hook agentSpawn
+# @hook stop
 # @priority 90
-# @description Scan ended sessions and spawn worker agents to extract memories.
-"""At agent spawn, find unprocessed ended sessions and spawn extraction workers."""
+# @description Spawn worker agents to extract memories from unprocessed sessions.
+"""On stop, find unprocessed sessions from DB and spawn extraction workers."""
 
 import os
 import subprocess
@@ -15,34 +15,16 @@ _CRITERIA_PATH = _ROOT / "prompts" / "extract-criteria.md"
 _MEMORY_PY = _HOOKS_DIR / "_memory.py"
 
 _SESSIONS_DIR = Path.home() / ".kiro" / "sessions" / "cli"
-_CURRENT_SESSION = os.environ.get("KIRO_SESSION_ID", "")
 _MAX_WORKERS = 2
 
 sys.path.insert(0, str(_HOOKS_DIR))
 
 
-def _find_unprocessed() -> list[str]:
-    """Find session IDs that are ended (no .lock) and not yet processed."""
-    from _memory import is_processed
+def main() -> None:
+    from _memory import claim_session, find_unprocessed
 
-    candidates = []
-    for jsonl in _SESSIONS_DIR.glob("*.jsonl"):
-        sid = jsonl.stem
-        if sid == _CURRENT_SESSION:
-            continue
-        if (jsonl.parent / f"{sid}.lock").exists():
-            continue
-        if is_processed(sid):
-            continue
-        candidates.append(sid)
-    return candidates
-
-
-def _claim_and_spawn(candidates: list[str]) -> None:
-    """Claim sessions and spawn worker agents (up to MAX_WORKERS)."""
-    from _memory import claim_session
-
-    if not _CRITERIA_PATH.is_file():
+    candidates = find_unprocessed()
+    if not candidates or not _CRITERIA_PATH.is_file():
         return
 
     criteria = _CRITERIA_PATH.read_text(encoding="utf-8")
@@ -55,6 +37,8 @@ def _claim_and_spawn(candidates: list[str]) -> None:
 
     for sid in claimed:
         jsonl_path = _SESSIONS_DIR / f"{sid}.jsonl"
+        if not jsonl_path.exists():
+            continue
         prompt = f"""{criteria}
 
 ---
@@ -95,12 +79,6 @@ If the session has nothing worth extracting, still mark it finished with count 0
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-
-
-def main() -> None:
-    candidates = _find_unprocessed()
-    if candidates:
-        _claim_and_spawn(candidates)
 
 
 if __name__ == "__main__":
