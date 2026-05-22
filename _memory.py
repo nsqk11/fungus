@@ -6,6 +6,7 @@ Provides save, export, and session-processing tracking.
 
 import os
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,18 +15,21 @@ _PROP_DIR = Path(__file__).resolve().parent
 MEMORY_DB = _PROP_DIR / "memory.db"
 _MEMORY_DIR = _PROP_DIR / "data"
 
-CATEGORIES = ("correction", "preference", "discovery", "decision")
+CATEGORIES = ("skill", "kb", "rule")
 
 _SCHEMA = """\
-CREATE TABLE IF NOT EXISTS memories (
-    id INTEGER PRIMARY KEY,
-    summary TEXT NOT NULL,
-    detail TEXT,
-    trigger TEXT,
-    tags TEXT,
-    category TEXT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
-    source_event_id INTEGER
+CREATE TABLE IF NOT EXISTS fragments (
+    id TEXT PRIMARY KEY,
+    extractor TEXT NOT NULL,
+    task_or_topic TEXT,
+    fragment_type TEXT,
+    content TEXT NOT NULL,
+    context TEXT,
+    x_knowledge REAL DEFAULT 0.0,
+    y_rule REAL DEFAULT 0.0,
+    z_task REAL DEFAULT 0.0,
+    session_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS meta (
@@ -37,7 +41,7 @@ CREATE TABLE IF NOT EXISTS processed_sessions (
     session_id TEXT PRIMARY KEY,
     started_at TEXT NOT NULL,
     finished_at TEXT,
-    memory_count INTEGER DEFAULT 0
+    fragment_count INTEGER DEFAULT 0
 );
 """
 
@@ -46,10 +50,6 @@ def get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(MEMORY_DB), timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
-    # Migration: add trigger column if missing
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(memories)").fetchall()}
-    if "trigger" not in cols:
-        conn.execute("ALTER TABLE memories ADD COLUMN trigger TEXT")
     return conn
 
 
@@ -106,7 +106,7 @@ def is_processed(session_id: str) -> bool:
     return row is not None
 
 
-def find_unprocessed() -> list[str]:
+def find_unprocessed() :
     """Find session IDs registered in DB but not yet finished."""
     conn = get_conn()
     rows = conn.execute(
@@ -119,24 +119,31 @@ def find_unprocessed() -> list[str]:
 # --- Memory save/export ---------------------------------------------------
 
 
-def save_memories(entries: list[dict], source_id: int = 0, session_id: str = "") -> int:
-    """Save extracted memories to DB and re-export files. Returns count saved."""
+def save_fragments(entries, extractor: str, session_id: str = "") -> int:
+    """Save extracted fragments to DB and re-export. Returns count saved."""
     conn = get_conn()
     count = 0
     for entry in entries:
-        cat = entry.get("category", "").lower()
-        if cat not in CATEGORIES:
-            continue
+        scores = entry.get("scores", {})
         conn.execute(
-            "INSERT INTO memories (summary, detail, trigger, tags, category, source_event_id)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (entry["summary"], entry.get("detail", ""), entry.get("trigger", ""),
-             entry.get("tags", ""), cat, source_id),
+            "INSERT INTO fragments (id, extractor, task_or_topic, fragment_type, content, context,"
+            " x_knowledge, y_rule, z_task, session_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()),
+             extractor,
+             entry.get("task") or entry.get("topic") or "",
+             entry.get("fragment_type", ""),
+             entry.get("content") or entry.get("rule") or entry.get("summary", ""),
+             entry.get("context") or entry.get("rationale") or "",
+             scores.get("x_knowledge", 0.0),
+             scores.get("y_rule", 0.0),
+             scores.get("z_task", 0.0),
+             session_id),
         )
         count += 1
     if session_id:
         conn.execute(
-            "UPDATE processed_sessions SET memory_count = memory_count + ? WHERE session_id = ?",
+            "UPDATE processed_sessions SET fragment_count = fragment_count + ? WHERE session_id = ?",
             (count, session_id),
         )
     conn.commit()
@@ -146,35 +153,51 @@ def save_memories(entries: list[dict], source_id: int = 0, session_id: str = "")
 
 
 def export() -> None:
-    """Export memories to per-category .md files for KB indexing."""
+    """Export fragments: y_rule>0 to rules.md, rest to KB directory."""
     conn = get_conn()
     rows = conn.execute(
-        "SELECT summary, detail, tags, category, created_at FROM memories ORDER BY id"
+        "SELECT extractor, task_or_topic, fragment_type, content, context,"
+        " x_knowledge, y_rule, z_task, created_at"
+        " FROM fragments ORDER BY id"
     ).fetchall()
     conn.close()
 
     _MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
-    sections: dict[str, list[str]] = {c: [] for c in CATEGORIES}
+    rules = []
+    kb_entries = []
 
-    for summary, detail, tags, category, created_at in rows:
-        cat = category if category in CATEGORIES else "discovery"
-        entry_date = created_at[:10] if created_at else datetime.now().strftime("%Y-%m-%d")
-        md = f"## {summary}\n\nDate: {entry_date} | Tags: {tags}\n"
-        if detail:
-            md += f"\n{detail}\n"
-        sections[cat].append(md)
-
-    for cat in CATEGORIES:
-        out_path = _MEMORY_DIR / f"memory-{cat}.md"
-        if sections[cat]:
-            content = f"# {cat.title()}\n\n" + "\n".join(sections[cat])
-            out_path.write_text(content, encoding="utf-8")
+    for extractor, topic, ftype, content, context, xk, yr, zt, created_at in rows:
+        if yr > 0:
+            # Goes to rules.md (always loaded by main agent)
+            entry = f"- {content}"
+            if context:
+                entry += f" ({context})"
+            rules.append(entry)
         else:
-            out_path.unlink(missing_ok=True)
+            # Goes to KB (searchable)
+            md = f"## {topic}\n\n"
+            if ftype:
+                md += f"Type: {ftype} | "
+            md += f"Scores: x={xk:.1f} z={zt:.1f}\n\n"
+            md += f"{content}\n"
+            if context:
+                md += f"\n> {context}\n"
+            kb_entries.append(md)
 
-    # Clean up old single file
-    (_MEMORY_DIR / "memories.md").unlink(missing_ok=True)
+    # Write rules.md
+    rules_path = _MEMORY_DIR / "rules.md"
+    if rules:
+        rules_path.write_text("# Rules\n\n" + "\n".join(rules) + "\n", encoding="utf-8")
+    else:
+        rules_path.unlink(missing_ok=True)
+
+    # Write KB file
+    kb_path = _MEMORY_DIR / "fragments.md"
+    if kb_entries:
+        kb_path.write_text("# Fragments\n\n" + "\n".join(kb_entries), encoding="utf-8")
+    else:
+        kb_path.unlink(missing_ok=True)
 
 
 # --- CLI entry point (for worker agent) -----------------------------------
@@ -186,7 +209,7 @@ if __name__ == "__main__":
 
     usage = (
         "Usage:\n"
-        "  _memory.py save '<json_array>' [session_id]\n"
+        "  _memory.py save <extractor> '<json_array>' [session_id]\n"
         "  _memory.py finish <session_id> [count]\n"
         "  _memory.py list-unprocessed\n"
         "  _memory.py list-existing"
@@ -197,13 +220,14 @@ if __name__ == "__main__":
         sys.exit(1)
 
     cmd = sys.argv[1]
-    if cmd == "save" and len(sys.argv) >= 3:
-        entries = json.loads(sys.argv[2])
+    if cmd == "save" and len(sys.argv) >= 4:
+        extractor = sys.argv[2]
+        entries = json.loads(sys.argv[3])
         if not isinstance(entries, list):
             entries = [entries]
-        sid = sys.argv[3] if len(sys.argv) >= 4 else ""
-        count = save_memories(entries, 0, session_id=sid)
-        print(f"Saved {count} memories.")
+        sid = sys.argv[4] if len(sys.argv) >= 5 else ""
+        count = save_fragments(entries, extractor, session_id=sid)
+        print(f"Saved {count} fragments.")
     elif cmd == "finish" and len(sys.argv) >= 3:
         mc = int(sys.argv[3]) if len(sys.argv) >= 4 else 0
         finish_session(sys.argv[2], mc)
@@ -213,10 +237,12 @@ if __name__ == "__main__":
             print(sid)
     elif cmd == "list-existing":
         conn = get_conn()
-        rows = conn.execute("SELECT summary FROM memories ORDER BY id DESC LIMIT 50").fetchall()
+        rows = conn.execute(
+            "SELECT extractor, task_or_topic, content FROM fragments ORDER BY id DESC LIMIT 50"
+        ).fetchall()
         conn.close()
-        for r in rows:
-            print(f"- {r[0]}")
+        for ext, topic, content in rows:
+            print(f"[{ext}] {topic}: {content[:80]}")
         if not rows:
             print("(none)")
     else:

@@ -1,8 +1,7 @@
-# Runtime data
-properties/memory/memory.db
-properties/memory/data/
-skills/*/data/
-
-# Python
+data/
+*.db
+*.db-wal
+*.db-shm
 __pycache__/
 *.pyc
+extract.lock

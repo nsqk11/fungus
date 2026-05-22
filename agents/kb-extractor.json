@@ -1,0 +1,14 @@
+{
+  "name": "kb-extractor",
+  "description": "Extracts knowledge base entries from session transcripts.",
+  "prompt": "",
+  "tools": ["read", "shell"],
+  "allowedTools": ["read", "shell"],
+  "resources": [
+    "file://FUNGUS_ROOT/prompts/extract-kb.md",
+    "file://FUNGUS_ROOT/prompts/extract-common.md"
+  ],
+  "hooks": {},
+  "toolsSettings": {},
+  "model": "claude-sonnet-4.6"
+}
