@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 _FUNGUS_DIR = Path(__file__).resolve().parent.parent
-_DB = _FUNGUS_DIR / "data" / "memory.db"
+_DB = Path.home() / ".kiro" / ".memory.db"
 
 FRAGMENT_THRESHOLD = 30
 TASK_THRESHOLD = 5  # same task has this many fragments

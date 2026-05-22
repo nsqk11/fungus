@@ -12,8 +12,10 @@ from pathlib import Path
 
 _ROOT = Path(os.environ.get("FUNGUS_ROOT", Path(__file__).resolve().parent.parent.parent))
 _PROP_DIR = Path(__file__).resolve().parent
-MEMORY_DB = _PROP_DIR / "memory.db"
-_MEMORY_DIR = _PROP_DIR / "data"
+_KIRO_HOME = Path.home() / ".kiro"
+MEMORY_DB = _KIRO_HOME / ".memory.db"
+_RULES_DIR = _KIRO_HOME / "prompts"
+_KB_DIR = _KIRO_HOME / "knowledge-bases" / "fungus"
 
 CATEGORIES = ("skill", "kb", "rule")
 
@@ -162,7 +164,8 @@ def export() -> None:
     ).fetchall()
     conn.close()
 
-    _MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    _RULES_DIR.mkdir(parents=True, exist_ok=True)
+    _KB_DIR.mkdir(parents=True, exist_ok=True)
 
     rules = []
     kb_entries = []
@@ -186,14 +189,14 @@ def export() -> None:
             kb_entries.append(md)
 
     # Write rules.md
-    rules_path = _MEMORY_DIR / "rules.md"
+    rules_path = _RULES_DIR / "rules.md"
     if rules:
         rules_path.write_text("# Rules\n\n" + "\n".join(rules) + "\n", encoding="utf-8")
     else:
         rules_path.unlink(missing_ok=True)
 
     # Write KB file
-    kb_path = _MEMORY_DIR / "fragments.md"
+    kb_path = _KB_DIR / "fragments.md"
     if kb_entries:
         kb_path.write_text("# Fragments\n\n" + "\n".join(kb_entries), encoding="utf-8")
     else:
