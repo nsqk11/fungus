@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 _PROP_DIR = Path(__file__).resolve().parent
-_LOCK_FILE = _PROP_DIR / "extract.lock"
+_LOCK_FILE = Path.home() / ".kiro" / ".extract.lock"
 _SESSIONS_DIR = Path.home() / ".kiro" / "sessions" / "cli"
 
 sys.path.insert(0, str(_PROP_DIR))
