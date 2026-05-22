@@ -83,13 +83,13 @@ def claim_session(session_id: str) -> bool:
     return claimed
 
 
-def finish_session(session_id: str, memory_count: int) -> None:
+def finish_session(session_id: str, fragment_count: int) -> None:
     """Mark a session as finished."""
     now = datetime.now(timezone.utc).isoformat()
     conn = get_conn()
     conn.execute(
-        "UPDATE processed_sessions SET finished_at = ?, memory_count = ? WHERE session_id = ?",
-        (now, memory_count, session_id),
+        "UPDATE processed_sessions SET finished_at = ?, fragment_count = ? WHERE session_id = ?",
+        (now, fragment_count, session_id),
     )
     conn.commit()
     conn.close()
