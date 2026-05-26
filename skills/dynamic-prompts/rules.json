@@ -1,0 +1,17 @@
+[
+  {
+    "event": ["userPromptSubmit", "preToolUse"],
+    "pattern": "push|force.push|git push",
+    "context": "Before pushing:\n- Check remote URL (git remote -v)\n- If GitHub, exclude sensitive files (.env, tokens, credentials)\n- Prefer git push -u for new branches\n- Never force push to main/master without explicit permission"
+  },
+  {
+    "event": ["preToolUse"],
+    "pattern": "rm -rf|rm -f|rmdir|shutil\\.rmtree",
+    "context": "Destructive file operation:\n- Confirm exact path with user\n- Check directory contents before deleting\n- Prefer moving to /tmp over permanent deletion when possible"
+  },
+  {
+    "event": ["userPromptSubmit"],
+    "pattern": "prod|production.*config|deploy to prod",
+    "context": "Production change detected:\n- Prototype the change in /tmp first\n- Show diff to user before applying\n- Confirm there is a rollback path"
+  }
+]

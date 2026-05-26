@@ -21,7 +21,7 @@ Two modes of operation:
 
 ```
 Session ends → agentSpawn hook fires
-    → hooks/spawn-extract.py launches scripts/extract.py (background)
+    → scripts/spawn-extract.py launches scripts/extract.py (background)
         → 3 extractor agents run in parallel on the session transcript
             → fragments scored and saved to SQLite
                 → exported to rules.md + fragments.md
@@ -31,11 +31,11 @@ Session ends → agentSpawn hook fires
 
 | File | Role |
 |------|------|
-| `hooks/spawn-extract.py` | Hook triggered on `agentSpawn`; launches extraction in background |
+| `scripts/spawn-extract.py` | Hook triggered on `agentSpawn`; launches extraction in background |
 | `scripts/extract.py` | Batch scheduler; loops unprocessed sessions with 5-min timeout |
 | `scripts/memory.py` | DB operations; called by extractor agents to save results |
-| `agents/*.json` | 3 worker agent configs (skill-extractor, kb-extractor, rule-extractor) |
-| `prompts/*.md` | Instructions for each extractor agent |
+| `references/agents/*.md` | 3 worker agent configs (skill-extractor, kb-extractor, rule-extractor). Install by copying to `$KIRO_HOME/agents/` as `.json`. |
+| `references/extract-*.md` | Instructions for each extractor agent |
 
 ### Scoring dimensions
 
@@ -57,7 +57,7 @@ Register the hook in your agent config:
 ```json
 {
   "hooks": {
-    "agentSpawn": ["$KIRO_HOME/skills/fragment-extractor/hooks/spawn-extract.py"]
+    "agentSpawn": ["$KIRO_HOME/skills/fragment-extractor/scripts/spawn-extract.py"]
   }
 }
 ```
@@ -65,8 +65,9 @@ Register the hook in your agent config:
 Register extractor agents:
 
 ```bash
-for f in agents/*.json; do
-    sed "s|FUNGUS_ROOT|$KIRO_HOME/skills|g" "$f" > $KIRO_HOME/agents/$(basename "$f")
+for f in references/agents/*.md; do
+    name=$(basename "$f" .md)
+    sed "s|FUNGUS_ROOT|$KIRO_HOME/skills|g" "$f" > $KIRO_HOME/agents/${name}.json
 done
 ```
 

@@ -26,8 +26,8 @@ Hook scripts stay in their skill directories. Register them in your agent's conf
 ```json
 {
   "hooks": {
-    "userPromptSubmit": ["~/.kiro/skills/dynamic-prompts/hooks/router.py"],
-    "agentSpawn": ["~/.kiro/skills/fragment-extractor/hooks/spawn-extract.py"]
+    "userPromptSubmit": ["~/.kiro/skills/dynamic-prompts/scripts/inject.py"],
+    "agentSpawn": ["~/.kiro/skills/fragment-extractor/scripts/spawn-extract.py"]
   }
 }
 ```
@@ -80,13 +80,13 @@ fungus/
 └── skills/
     ├── fragment-extractor/
     │   ├── SKILL.md
-    │   ├── hooks/
+    │   ├── scripts/
     │   ├── scripts/
     │   ├── prompts/
     │   └── agents/
     └── dynamic-prompts/
         ├── SKILL.md
-        └── hooks/
+        └── scripts/
 ```
 
 - [./skills](./skills): The skill collection
