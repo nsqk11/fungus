@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _KIRO_HOME = Path.home() / ".kiro"
-_DB_PATH = Path(os.environ.get("TASK_TRACKING_DB", "")) or _KIRO_HOME / "data" / "task-tracking" / "tasks.db"
+_DB_PATH = _KIRO_HOME / "data" / "task-tracking" / "tasks.db"
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS records (

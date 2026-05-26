@@ -5,8 +5,8 @@
   "tools": ["read", "shell"],
   "allowedTools": ["read", "shell"],
   "resources": [
-    "file://FUNGUS_ROOT/skills/fragment-extractor/references/extract-skill.md",
-    "file://FUNGUS_ROOT/skills/fragment-extractor/references/extract-common.md"
+    "file://FUNGUS_ROOT/fragment-extractor/references/extract-skill.md",
+    "file://FUNGUS_ROOT/fragment-extractor/references/extract-common.md"
   ],
   "hooks": {},
   "toolsSettings": {},
