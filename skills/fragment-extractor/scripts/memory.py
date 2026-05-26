@@ -17,7 +17,7 @@ _KIRO_HOME = Path.home() / ".kiro"
 _DATA_DIR = _KIRO_HOME / "data" / "fragment-extractor"
 MEMORY_DB = _DATA_DIR / "memory.db"
 _RULES_DIR = _KIRO_HOME / "prompts"
-_KB_DIR = _KIRO_HOME / "knowledge-bases" / "fungus"
+_KB_DIR = _KIRO_HOME / "knowledge-bases" / "fragment-extractor"
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS fragments (

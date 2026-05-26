@@ -169,7 +169,7 @@ SQLite at `$KIRO_HOME/data/fragment-extractor/memory.db`.
 
 Exports:
 - `$KIRO_HOME/prompts/rules.md` — rules (y_rule > 0), always loaded
-- `$KIRO_HOME/knowledge-bases/fungus/fragments.md` — KB entries, searchable
+- `$KIRO_HOME/knowledge-bases/fragment-extractor/fragments.md` — KB entries, searchable
 
 ---
 
