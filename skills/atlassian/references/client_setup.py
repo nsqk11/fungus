@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Template: write your own Atlassian API code using atlassian-python-api.
 
-Read this file when you need an operation that the ``atlassian-api`` skill
+Read this file when you need an operation that the ``atlassian`` skill
 does not cover (creating or editing pages, JQL/CQL searches, bulk work,
 custom fields, attachments, …).
 
@@ -31,13 +31,7 @@ from atlassian import Confluence, Jira
 
 
 def _resolve_db() -> Path:
-    """Locate the atlassian-api skill's SQLite store."""
-    override = os.environ.get("ATLASSIAN_API_DB")
-    if override:
-        return Path(override)
-    # This file sits at <skill>/references/; the DB lives at ~/.kiro/data/atlassian/.
-    from pathlib import Path
-    import os
+    """Locate the atlassian skill's SQLite store."""
     override = os.environ.get("ATLASSIAN_API_DB")
     if override:
         return Path(override)
@@ -49,12 +43,12 @@ def _resolve_db() -> Path:
 def load_pat(domain: str) -> str:
     """Return the stored PAT for *domain* or raise KeyError.
 
-    The domain must match what was used in ``atlassian-api token set``.
+    The domain must match what was used in ``scripts/cli.py token set``.
     """
     db = _resolve_db()
     if not db.exists():
         raise KeyError(
-            f"No PAT store found at {db}; run 'atlassian-api token set "
+            f"No PAT store found at {db}; run 'scripts/cli.py token set "
             f"{domain} <pat>' first."
         )
     row = sqlite3.connect(db).execute(
@@ -62,7 +56,7 @@ def load_pat(domain: str) -> str:
     ).fetchone()
     if not row:
         raise KeyError(
-            f"No PAT stored for {domain}; run 'atlassian-api token set "
+            f"No PAT stored for {domain}; run 'scripts/cli.py token set "
             f"{domain} <pat>' first."
         )
     return row[0]

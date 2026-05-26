@@ -1,514 +1,370 @@
 #!/usr/bin/env python3
-"""task-tracking — per-task lifecycle metadata CLI.
-
-One JSON file per project lives under ``data/workbenches/<id>.json``.
-Run ``python3.12 cli.py --help`` for full usage.
-
-The script is meant to be executed directly; it is not a hook.
-"""
-from __future__ import annotations
+"""task-tracking — structured logbook for tasks."""
 
 import argparse
-import datetime
-import json
+import os
+import sqlite3
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
-# Sibling imports from the scripts/ directory itself.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_KIRO_HOME = Path.home() / ".kiro"
+_DB_PATH = Path(os.environ.get("TASK_TRACKING_DB", "")) or _KIRO_HOME / "data" / "task-tracking" / "tasks.db"
 
-import _schema  # noqa: E402
-import _store  # noqa: E402
-
-
-# --- helpers --------------------------------------------------------------
-
-
-def _die(msg: str, code: int = 1) -> None:
-    print(f"ERR: {msg}", file=sys.stderr)
-    raise SystemExit(code)
-
-
-def _resolve(wb_id: str) -> str:
-    try:
-        return _store.resolve_id(wb_id)
-    except _store.StoreError as exc:
-        _die(str(exc))
+_SCHEMA = """\
+CREATE TABLE IF NOT EXISTS records (
+    id         INTEGER PRIMARY KEY,
+    task_id    TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task ON records(task_id);
+CREATE INDEX IF NOT EXISTS idx_type ON records(task_id, type);
+"""
 
 
-def _load(wb_id: str) -> dict[str, Any]:
-    try:
-        return _store.load(wb_id)
-    except _store.StoreError as exc:
-        _die(str(exc))
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _save(workbench: dict[str, Any]) -> None:
-    try:
-        _store.save(workbench)
-    except _store.StoreError as exc:
-        _die(str(exc))
+def _nano_id() -> int:
+    return time.time_ns()
 
 
-def _today() -> str:
-    return datetime.date.today().isoformat()
+def _conn() -> sqlite3.Connection:
+    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(_DB_PATH))
+    conn.executescript(_SCHEMA)
+    return conn
 
 
-def _get_field(obj: Any, path: str) -> Any:
-    """Walk ``obj`` following a dot-separated ``path``.
-
-    Supports dict keys and integer list indices. Returns ``None`` if the
-    path does not resolve (distinct from a JSON null, so callers that
-    need to tell them apart should not use this helper).
-    """
-    cur = obj
-    for part in path.split("."):
-        if isinstance(cur, dict):
-            cur = cur.get(part)
-        elif isinstance(cur, list):
-            try:
-                cur = cur[int(part)]
-            except (ValueError, IndexError):
-                return None
-        else:
-            return None
-        if cur is None:
-            return None
-    return cur
+def _die(msg: str) -> int:
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(1)
 
 
-def _dump_json(value: Any) -> None:
-    print(json.dumps(value, indent=2, ensure_ascii=False))
+def _get_meta(conn: sqlite3.Connection, task_id: str) -> tuple | None:
+    return conn.execute(
+        "SELECT id, content FROM records WHERE task_id = ? AND type = 'meta' LIMIT 1",
+        (task_id,),
+    ).fetchone()
 
 
-# --- commands -------------------------------------------------------------
+# --- write commands -------------------------------------------------------
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    try:
-        _store.create(args.id, args.name, args.type or "")
-    except _store.StoreError as exc:
-        _die(str(exc))
-    print(f"OK: created {args.id}")
+    conn = _conn()
+    if _get_meta(conn, args.task_id):
+        _die(f"task '{args.task_id}' already exists")
+    rid = _nano_id()
+    conn.execute(
+        "INSERT INTO records (id, task_id, type, content, updated_at) VALUES (?, ?, 'meta', ?, ?)",
+        (rid, args.task_id, f"{args.name} [active]", _now()),
+    )
+    conn.commit()
+    print(f"OK: created {args.task_id} (id: {rid})")
     return 0
 
 
-def cmd_query(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    if args.field:
-        value = _get_field(workbench, args.field)
-        if value is None:
-            _die(f"field {args.field!r} not found in {wb_id!r}")
-        _dump_json(value)
-    else:
-        _dump_json(workbench)
+def cmd_add(args: argparse.Namespace) -> int:
+    conn = _conn()
+    if not _get_meta(conn, args.task_id):
+        _die(f"no task matching '{args.task_id}'")
+    rid = _nano_id()
+    conn.execute(
+        "INSERT INTO records (id, task_id, type, content, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (rid, args.task_id, args.type, args.content, _now()),
+    )
+    conn.commit()
+    print(f"OK: added (id: {rid})")
     return 0
 
 
-def cmd_log(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    entry: dict[str, Any] = {
-        "date": args.date or _today(),
-        "summary": args.summary,
-    }
-    if args.ref:
-        entry["ref"] = args.ref
-    workbench["changeLog"].append(entry)
-    _save(workbench)
-    print("OK: logged")
+def cmd_update(args: argparse.Namespace) -> int:
+    conn = _conn()
+    row = conn.execute("SELECT id FROM records WHERE id = ?", (args.id,)).fetchone()
+    if not row:
+        _die(f"record {args.id} not found")
+    sets, vals = [], []
+    if args.content is not None:
+        sets.append("content = ?")
+        vals.append(args.content)
+    if args.type is not None:
+        sets.append("type = ?")
+        vals.append(args.type)
+    sets.append("updated_at = ?")
+    vals.append(_now())
+    vals.append(args.id)
+    conn.execute(f"UPDATE records SET {', '.join(sets)} WHERE id = ?", vals)
+    conn.commit()
+    print("OK: updated")
     return 0
 
 
-def cmd_review_add(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    next_id = len(workbench["reviews"]) + 1
-    entry = {
-        "id": next_id,
-        "location": args.location or "",
-        "comment": args.comment,
-        "by": args.by,
-        "response": args.response or "",
-        "done": False,
-    }
-    workbench["reviews"].append(entry)
-    _save(workbench)
-    print(f"OK: review #{next_id} added")
+def cmd_delete(args: argparse.Namespace) -> int:
+    conn = _conn()
+    cur = conn.execute("DELETE FROM records WHERE id = ?", (args.id,))
+    if cur.rowcount == 0:
+        _die(f"record {args.id} not found")
+    conn.commit()
+    print("OK: deleted")
     return 0
 
 
-def cmd_review_done(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    found = False
-    for review in workbench["reviews"]:
-        if review.get("id") == args.review_id:
-            review["done"] = True
-            if args.response is not None:
-                review["response"] = args.response
-            found = True
-            break
-    if not found:
-        _die(f"review #{args.review_id} not found in {wb_id!r}")
-    _save(workbench)
-    print(f"OK: review #{args.review_id} done")
+def _set_status(task_id: str, status: str) -> int:
+    conn = _conn()
+    meta = _get_meta(conn, task_id)
+    if not meta:
+        _die(f"no task matching '{task_id}'")
+    # Replace [status] in content
+    content = meta[1]
+    import re
+    content = re.sub(r"\[.*?\]\s*$", "", content).strip()
+    content = f"{content} [{status}]"
+    conn.execute(
+        "UPDATE records SET content = ?, updated_at = ? WHERE id = ?",
+        (content, _now(), meta[0]),
+    )
+    conn.commit()
+    print(f"OK: {task_id} → {status}")
     return 0
 
 
-def cmd_milestone_add(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    entry = {
-        "name": args.name,
-        "target": args.target or "",
-        "done": False,
-        "note": args.note or "",
-    }
-    workbench["milestones"].append(entry)
-    _save(workbench)
-    print(f"OK: milestone {args.name!r} added")
+def cmd_done(args: argparse.Namespace) -> int:
+    return _set_status(args.task_id, "done")
+
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    return _set_status(args.task_id, "archived")
+
+
+# --- read commands --------------------------------------------------------
+
+
+def cmd_get(args: argparse.Namespace) -> int:
+    conn = _conn()
+    sql = "SELECT id, type, content, updated_at FROM records WHERE task_id = ?"
+    params: list = [args.task_id]
+    if args.type:
+        sql += " AND type = ?"
+        params.append(args.type)
+    if args.since:
+        sql += " AND updated_at >= ?"
+        params.append(args.since)
+    sql += " ORDER BY id DESC"
+    if args.last:
+        sql += " LIMIT ?"
+        params.append(args.last)
+    rows = conn.execute(sql, params).fetchall()
+    if not rows:
+        print("(no records)")
+        return 0
+    for rid, rtype, content, updated in rows:
+        short = (content[:60] + "...") if len(content) > 63 else content
+        print(f"{rid}  {rtype:<12} {short}  ({updated})")
     return 0
 
 
-def cmd_milestone_done(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    found = False
-    for ms in workbench["milestones"]:
-        if ms.get("name") == args.name:
-            ms["done"] = True
-            if args.note is not None:
-                ms["note"] = args.note
-            found = True
-            break
-    if not found:
-        _die(f"milestone {args.name!r} not found in {wb_id!r}")
-    _save(workbench)
-    print(f"OK: milestone {args.name!r} done")
-    return 0
-
-
-def cmd_milestone_update(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    found = False
-    for ms in workbench["milestones"]:
-        if ms.get("name") == args.name:
-            if args.target is not None:
-                ms["target"] = args.target
-            if args.note is not None:
-                ms["note"] = args.note
-            found = True
-            break
-    if not found:
-        _die(f"milestone {args.name!r} not found in {wb_id!r}")
-    _save(workbench)
-    print(f"OK: milestone {args.name!r} updated")
-    return 0
-
-
-def cmd_deliverable_add(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    entry: dict[str, Any] = {"label": args.label, "type": args.type or "file"}
-    if args.path:
-        entry["path"] = args.path
-    if args.url:
-        entry["url"] = args.url
-    workbench["deliverables"].append(entry)
-    _save(workbench)
-    print(f"OK: deliverable {args.label!r} added")
-    return 0
-
-
-def cmd_deliverable_rm(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    before = len(workbench["deliverables"])
-    workbench["deliverables"] = [
-        d for d in workbench["deliverables"] if d.get("label") != args.label
-    ]
-    if len(workbench["deliverables"]) == before:
-        _die(f"deliverable {args.label!r} not found in {wb_id!r}")
-    _save(workbench)
-    print(f"OK: deliverable {args.label!r} removed")
-    return 0
-
-
-def cmd_reference_add(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    entry: dict[str, Any] = {"label": args.label, "type": args.type or "file"}
-    if args.path:
-        entry["path"] = args.path
-    if args.url:
-        entry["url"] = args.url
-    workbench["references"].append(entry)
-    _save(workbench)
-    print(f"OK: reference {args.label!r} added")
-    return 0
-
-
-def cmd_reference_rm(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    before = len(workbench["references"])
-    workbench["references"] = [
-        r for r in workbench["references"] if r.get("label") != args.label
-    ]
-    if len(workbench["references"]) == before:
-        _die(f"reference {args.label!r} not found in {wb_id!r}")
-    _save(workbench)
-    print(f"OK: reference {args.label!r} removed")
-    return 0
-
-
-def cmd_note(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    workbench["notes"].append({"topic": args.topic, "content": args.content})
-    _save(workbench)
-    print("OK: note added")
-    return 0
-
-
-def cmd_status(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    print(f"=== {workbench['id']} ({workbench['status']}) ===")
-    pending_ms = [
-        m for m in workbench["milestones"] if not m.get("done")
-    ]
-    print(f"Milestones pending: {len(pending_ms)}")
-    for ms in pending_ms:
-        target = f" ({ms['target']})" if ms.get("target") else ""
-        note = f" — {ms['note']}" if ms.get("note") else ""
-        print(f"  ⬜ {ms['name']}{target}{note}")
-
-    open_reviews = [r for r in workbench["reviews"] if not r.get("done")]
-    print(f"Review open: {len(open_reviews)}")
-    for rv in open_reviews:
-        loc = f"[{rv['location']}] " if rv.get("location") else ""
-        comment = rv.get("comment", "")
-        snippet = (comment[:57] + "…") if len(comment) > 60 else comment
-        print(f"  #{rv['id']} {loc}{snippet}")
+def cmd_show(args: argparse.Namespace) -> int:
+    conn = _conn()
+    row = conn.execute(
+        "SELECT id, task_id, type, content, updated_at FROM records WHERE id = ?",
+        (args.id,),
+    ).fetchone()
+    if not row:
+        _die(f"record {args.id} not found")
+    rid, task_id, rtype, content, updated = row
+    print(f"id:         {rid}")
+    print(f"task:       {task_id}")
+    print(f"type:       {rtype}")
+    print(f"updated_at: {updated}")
+    print(f"content:\n  {content}")
     return 0
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    ids = _store.list_ids()
-    rows: list[tuple[str, str, str, str]] = []
-    for wb_id in ids:
-        try:
-            workbench = _store.load(wb_id)
-        except _store.StoreError:
-            continue
-        status = workbench.get("status", "")
-        if args.status and status != args.status:
-            continue
-        rows.append(
-            (
-                wb_id,
-                workbench.get("type", ""),
-                status,
-                workbench.get("name", "")[:50],
-            )
-        )
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT task_id, content FROM records WHERE type = 'meta' ORDER BY task_id"
+    ).fetchall()
     if not rows:
-        print("No workbenches." if not args.status else f"No {args.status} workbenches.")
+        print("(no tasks)")
         return 0
-    id_w = max(len(r[0]) for r in rows)
-    type_w = max(4, max(len(r[1]) for r in rows))
-    status_w = max(6, max(len(r[2]) for r in rows))
-    for wb_id, type_, status, name in rows:
-        print(f"{wb_id:<{id_w}}  {type_:<{type_w}}  {status:<{status_w}}  {name}")
+    if args.status:
+        rows = [r for r in rows if f"[{args.status}]" in r[1]]
+    for task_id, content in rows:
+        print(f"{task_id:<16} {content}")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    conn = _conn()
+    meta = _get_meta(conn, args.task_id)
+    if not meta:
+        _die(f"no task matching '{args.task_id}'")
+    print(f"=== {args.task_id}: {meta[1]} ===")
+
+    milestones = conn.execute(
+        "SELECT content FROM records WHERE task_id = ? AND type = 'milestone' ORDER BY id",
+        (args.task_id,),
+    ).fetchall()
+    if milestones:
+        print(f"Milestones: {len(milestones)}")
+        for (c,) in milestones:
+            print(f"  • {c}")
+
+    blockers = conn.execute(
+        "SELECT content FROM records WHERE task_id = ? AND type = 'blocker' ORDER BY id",
+        (args.task_id,),
+    ).fetchall()
+    if blockers:
+        print(f"Blockers: {len(blockers)}")
+        for (c,) in blockers:
+            print(f"  ⚠ {c}")
+
+    recent = conn.execute(
+        "SELECT type, content FROM records WHERE task_id = ? AND type != 'meta' ORDER BY id DESC LIMIT 5",
+        (args.task_id,),
+    ).fetchall()
+    if recent:
+        print("Recent:")
+        for rtype, content in recent:
+            short = (content[:60] + "...") if len(content) > 63 else content
+            print(f"  [{rtype}] {short}")
     return 0
 
 
 def cmd_remind(_args: argparse.Namespace) -> int:
+    conn = _conn()
+    tasks = conn.execute(
+        "SELECT task_id, content FROM records WHERE type = 'meta' AND content LIKE '%[active]%'"
+    ).fetchall()
     found = False
-    for wb_id in _store.list_ids():
-        try:
-            workbench = _store.load(wb_id)
-        except _store.StoreError:
-            continue
-        if workbench.get("status") != "active":
-            continue
-        pending_ms = [m for m in workbench["milestones"] if not m.get("done")]
-        open_reviews = [r for r in workbench["reviews"] if not r.get("done")]
-        if not pending_ms and not open_reviews:
+    for task_id, meta_content in tasks:
+        milestones = conn.execute(
+            "SELECT content FROM records WHERE task_id = ? AND type = 'milestone'",
+            (task_id,),
+        ).fetchall()
+        blockers = conn.execute(
+            "SELECT content FROM records WHERE task_id = ? AND type = 'blocker'",
+            (task_id,),
+        ).fetchall()
+        if not milestones and not blockers:
             continue
         found = True
-        print(f"[{wb_id}]")
-        pending_ms.sort(key=lambda m: m.get("target") or "")
-        for ms in pending_ms:
-            target = f" ({ms['target']})" if ms.get("target") else ""
-            note = f" — {ms['note']}" if ms.get("note") else ""
-            print(f"  ⬜ {ms['name']}{target}{note}")
-        if open_reviews:
-            print(f"  📝 {len(open_reviews)} open review comment(s)")
+        print(f"[{task_id}]")
+        for (c,) in milestones:
+            print(f"  • {c}")
+        for (c,) in blockers:
+            print(f"  ⚠ {c}")
     if not found:
         print("No pending items.")
     return 0
 
 
-def cmd_archive(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    workbench["status"] = "archived"
-    _save(workbench)
-    print(f"OK: {wb_id} archived")
-    return 0
-
-
-def cmd_done(args: argparse.Namespace) -> int:
-    wb_id = _resolve(args.id)
-    workbench = _load(wb_id)
-    workbench["status"] = "done"
-    _save(workbench)
-    print(f"OK: {wb_id} done")
+def cmd_search(args: argparse.Namespace) -> int:
+    conn = _conn()
+    sql = "SELECT id, task_id, type, content FROM records WHERE content LIKE ?"
+    params: list = [f"%{args.query}%"]
+    if args.task_id:
+        sql += " AND task_id = ?"
+        params.append(args.task_id)
+    if args.type:
+        sql += " AND type = ?"
+        params.append(args.type)
+    sql += " ORDER BY id DESC LIMIT 20"
+    rows = conn.execute(sql, params).fetchall()
+    if not rows:
+        print("(no results)")
+        return 0
+    for rid, task_id, rtype, content in rows:
+        short = (content[:55] + "...") if len(content) > 58 else content
+        print(f"[{task_id}] {rid}  {rtype:<12} {short}")
     return 0
 
 
 # --- parser ---------------------------------------------------------------
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="task-tracking",
-        description=(
-            "Per-project lifecycle metadata: file paths, milestones,"
-            " change log, reviews, and decision notes."
-        ),
-    )
+def main() -> int:
+    p = argparse.ArgumentParser(prog="task-tracking")
     sub = p.add_subparsers(dest="command", required=True)
 
-    sp = sub.add_parser("init", help="Create a new workbench")
-    sp.add_argument("id")
-    sp.add_argument("--name", required=True)
-    sp.add_argument("--type", default="")
-    sp.set_defaults(func=cmd_init)
+    # init
+    s = sub.add_parser("init")
+    s.add_argument("task_id")
+    s.add_argument("--name", required=True)
+    s.set_defaults(func=cmd_init)
 
-    sp = sub.add_parser("query", help="Print workbench data")
-    sp.add_argument("id")
-    sp.add_argument(
-        "--field",
-        help=(
-            "Dot-separated path to a sub-value "
-            "(e.g. 'milestones', 'milestones.0.note')"
-        ),
-    )
-    sp.set_defaults(func=cmd_query)
+    # add
+    s = sub.add_parser("add")
+    s.add_argument("task_id")
+    s.add_argument("--type", required=True)
+    s.add_argument("--content", required=True)
+    s.set_defaults(func=cmd_add)
 
-    sp = sub.add_parser("log", help="Append a change log entry")
-    sp.add_argument("id")
-    sp.add_argument("--summary", required=True)
-    sp.add_argument("--date", help="YYYY-MM-DD (default: today)")
-    sp.add_argument("--ref", help="Optional git sha, PR link, etc.")
-    sp.set_defaults(func=cmd_log)
+    # update
+    s = sub.add_parser("update")
+    s.add_argument("id", type=int)
+    s.add_argument("--content")
+    s.add_argument("--type")
+    s.set_defaults(func=cmd_update)
 
-    sp = sub.add_parser("review", help="Manage review comments")
-    sp_sub = sp.add_subparsers(dest="review_command", required=True)
-    sp_add = sp_sub.add_parser("add", help="Add a review comment")
-    sp_add.add_argument("id")
-    sp_add.add_argument("--location", default="")
-    sp_add.add_argument("--comment", required=True)
-    sp_add.add_argument("--by", required=True)
-    sp_add.add_argument("--response", default="")
-    sp_add.set_defaults(func=cmd_review_add)
-    sp_done = sp_sub.add_parser("done", help="Mark a review comment done")
-    sp_done.add_argument("id")
-    sp_done.add_argument("--review-id", type=int, required=True, dest="review_id")
-    sp_done.add_argument("--response", default=None)
-    sp_done.set_defaults(func=cmd_review_done)
+    # delete
+    s = sub.add_parser("delete")
+    s.add_argument("id", type=int)
+    s.set_defaults(func=cmd_delete)
 
-    sp = sub.add_parser("milestone", help="Manage milestones")
-    sp_sub = sp.add_subparsers(dest="milestone_command", required=True)
-    sp_add = sp_sub.add_parser("add", help="Add a milestone")
-    sp_add.add_argument("id")
-    sp_add.add_argument("--name", required=True)
-    sp_add.add_argument("--target", default="")
-    sp_add.add_argument("--note", default="")
-    sp_add.set_defaults(func=cmd_milestone_add)
-    sp_done = sp_sub.add_parser("done", help="Mark a milestone done")
-    sp_done.add_argument("id")
-    sp_done.add_argument("--name", required=True)
-    sp_done.add_argument("--note", default=None)
-    sp_done.set_defaults(func=cmd_milestone_done)
-    sp_upd = sp_sub.add_parser("update", help="Update milestone target/note")
-    sp_upd.add_argument("id")
-    sp_upd.add_argument("--name", required=True)
-    sp_upd.add_argument("--target", default=None)
-    sp_upd.add_argument("--note", default=None)
-    sp_upd.set_defaults(func=cmd_milestone_update)
+    # done
+    s = sub.add_parser("done")
+    s.add_argument("task_id")
+    s.set_defaults(func=cmd_done)
 
-    sp = sub.add_parser("deliverable", help="Manage deliverables")
-    sp_sub = sp.add_subparsers(dest="deliverable_command", required=True)
-    sp_add = sp_sub.add_parser("add", help="Add a deliverable")
-    sp_add.add_argument("id")
-    sp_add.add_argument("--label", required=True)
-    sp_add.add_argument("--type", default="file")
-    sp_add.add_argument("--path", default="")
-    sp_add.add_argument("--url", default="")
-    sp_add.set_defaults(func=cmd_deliverable_add)
-    sp_rm = sp_sub.add_parser("rm", help="Remove a deliverable by label")
-    sp_rm.add_argument("id")
-    sp_rm.add_argument("--label", required=True)
-    sp_rm.set_defaults(func=cmd_deliverable_rm)
+    # archive
+    s = sub.add_parser("archive")
+    s.add_argument("task_id")
+    s.set_defaults(func=cmd_archive)
 
-    sp = sub.add_parser("reference", help="Manage references")
-    sp_sub = sp.add_subparsers(dest="reference_command", required=True)
-    sp_add = sp_sub.add_parser("add", help="Add a reference")
-    sp_add.add_argument("id")
-    sp_add.add_argument("--label", required=True)
-    sp_add.add_argument("--type", default="file")
-    sp_add.add_argument("--path", default="")
-    sp_add.add_argument("--url", default="")
-    sp_add.set_defaults(func=cmd_reference_add)
-    sp_rm = sp_sub.add_parser("rm", help="Remove a reference by label")
-    sp_rm.add_argument("id")
-    sp_rm.add_argument("--label", required=True)
-    sp_rm.set_defaults(func=cmd_reference_rm)
+    # get
+    s = sub.add_parser("get")
+    s.add_argument("task_id")
+    s.add_argument("--type")
+    s.add_argument("--last", type=int)
+    s.add_argument("--since")
+    s.set_defaults(func=cmd_get)
 
-    sp = sub.add_parser("note", help="Add a decision note")
-    sp.add_argument("id")
-    sp.add_argument("--topic", required=True)
-    sp.add_argument("--content", required=True)
-    sp.set_defaults(func=cmd_note)
+    # show
+    s = sub.add_parser("show")
+    s.add_argument("id", type=int)
+    s.set_defaults(func=cmd_show)
 
-    sp = sub.add_parser("status", help="Show pending milestones and open reviews")
-    sp.add_argument("id")
-    sp.set_defaults(func=cmd_status)
+    # list
+    s = sub.add_parser("list")
+    s.add_argument("--status")
+    s.set_defaults(func=cmd_list)
 
-    sp = sub.add_parser("list", help="List all workbenches")
-    sp.add_argument("--status", choices=_schema.VALID_STATUSES)
-    sp.set_defaults(func=cmd_list)
+    # status
+    s = sub.add_parser("status")
+    s.add_argument("task_id")
+    s.set_defaults(func=cmd_status)
 
-    sp = sub.add_parser(
-        "remind",
-        help="Show pending milestones and open reviews across active workbenches",
-    )
-    sp.set_defaults(func=cmd_remind)
+    # remind
+    s = sub.add_parser("remind")
+    s.set_defaults(func=cmd_remind)
 
-    sp = sub.add_parser("archive", help="Mark a workbench archived")
-    sp.add_argument("id")
-    sp.set_defaults(func=cmd_archive)
+    # search
+    s = sub.add_parser("search")
+    s.add_argument("--query", required=True)
+    s.add_argument("--task_id")
+    s.add_argument("--type")
+    s.set_defaults(func=cmd_search)
 
-    sp = sub.add_parser("done", help="Mark a workbench done")
-    sp.add_argument("id")
-    sp.set_defaults(func=cmd_done)
-
-    return p
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+    args = p.parse_args()
     return args.func(args)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

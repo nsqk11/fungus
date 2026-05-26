@@ -168,7 +168,7 @@ def _cmd_sync(args: argparse.Namespace) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="atlassian-api",
+        prog="atlassian",
         description=(
             "Atlassian token manager, Confluence page cache, and Jira"
             " issue fetcher. For writes, JQL, CQL, and other operations,"
