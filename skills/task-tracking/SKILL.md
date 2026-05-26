@@ -1,6 +1,6 @@
 ---
 name: task-tracking
-description: "Records progress and history for any ongoing task. Use whenever the user starts a task, logs progress, records a decision, tracks a deliverable, or asks what happened on a task. Also use when the user mentions milestones, blockers, deliverables, or wants a status summary. Think of it as a structured logbook — one database, many tasks, append-mostly."
+description: "Records progress and history for any ongoing task. Use whenever the user starts a task, logs progress, records a decision, tracks a deliverable, or asks what happened on a task. Also use when the user mentions milestones, blockers, deliverables, or wants a status summary. Trigger on mentions of 'task', 'task-tracking', 'logbook', 'progress', 'milestone', 'blocker', 'deliverable', or task IDs. Think of it as a structured logbook — one database, many tasks, append-mostly."
 compatibility: "Python 3.10+"
 ---
 
